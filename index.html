@@ -15,63 +15,104 @@
 <meta name="apple-mobile-web-app-title" content="no-tube">
 <title>no-tube — Kendi video arayüzüm</title>
 <style>
-:root{--bg:#101C22;--surface:#1A2B33;--line:#2A404A;--text:#E8F0EE;--muted:#8EA6AB;--accent:#F2C14E;
-  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root{--bg:#101C22;--surface:#182933;--surface2:#22363F;--line:#2A404A;--text:#E8F0EE;--muted:#93A9AE;--accent:#F2C14E;--accent-ink:#1B1500;--danger:#FF9D8A;--radius:14px;
+  color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *,*::before,*::after{box-sizing:inherit}
-html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px}
-#f{display:flex;flex:1;gap:8px;min-width:0}
-input{flex:1;min-width:0;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
-input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
-button.primary{background:var(--accent);color:#1b1500;border-color:var(--accent);font-weight:600}
-main{max-width:900px;margin:0 auto;padding:12px}
-.card{display:grid;grid-template-columns:40% 1fr;gap:12px;width:100%;text-align:left;margin-bottom:12px;padding:0;background:none;border:0;color:inherit}
-.card img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--surface)}
-.card h3{margin:0 0 4px;font-size:.95rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.card p{margin:0;font-size:.8rem;color:var(--muted)}
-.msg{padding:24px 8px;color:var(--muted);text-align:center}
-.msg.err{color:#ff9d8a}
-.more{display:block;margin:8px auto 24px}
-#player,#setup{position:fixed;inset:0;z-index:10;background:var(--bg);overflow:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:4px;padding:8px 10px;background:rgba(16,28,34,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--text);font-weight:800;font-size:1.05rem;letter-spacing:.01em;cursor:pointer;padding:7px 9px;border-radius:10px;white-space:nowrap}
+.brand img{width:28px;height:28px;display:block}
+.brand:hover{background:var(--surface)}
+#f{display:flex;flex:1;gap:0;min-width:0;max-width:560px;margin:0 auto}
+#f input{flex:1;min-width:0;background:var(--surface);color:var(--text);border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;padding:10px 14px;font:inherit}
+#f input::placeholder{color:var(--muted)}
+#f input:focus{outline:none;border-color:var(--accent)}
+#go{display:flex;align-items:center;gap:6px;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:0 12px 12px 0;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;flex:none}
+#go:hover{border-color:var(--accent);color:var(--accent)}
+#go svg{width:18px;height:18px}
+.iconbtn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;flex:none;background:transparent;border:1px solid transparent;border-radius:50%;color:var(--text);cursor:pointer}
+.iconbtn:hover{background:var(--surface);border-color:var(--line)}
+.iconbtn svg{width:22px;height:22px}
+button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
+button.primary:hover{filter:brightness(1.07)}
+button:focus-visible,#go:focus-visible,.brand:focus-visible,.chip:focus-visible,.card:focus-visible,.iconbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(max-width:520px){.brand span{display:none}#go span.lbl{display:none}#go{padding:10px 13px}}
+main{max-width:880px;margin:0 auto;padding:14px 12px 64px}
+.card{display:grid;grid-template-columns:1fr;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--radius);padding:8px;margin:0 0 10px;color:inherit;cursor:pointer}
+.card:hover{background:var(--surface);border-color:var(--line)}
+.thumb{position:relative;overflow:hidden;border-radius:12px;background:var(--surface2);aspect-ratio:16/9}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
+.card:hover .thumb img{transform:scale(1.03)}
+.vinfo{padding:10px 6px 6px;min-width:0}
+.vinfo h3{margin:0 0 4px;font-size:1rem;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vinfo .meta{margin:2px 0 0;font-size:.83rem;color:var(--muted)}
+.msg{padding:26px 12px;color:var(--muted);text-align:center}
+.msg.err{color:var(--danger)}
+.more{display:flex;align-items:center;justify-content:center;margin:12px auto 30px;padding:11px 30px;border-radius:999px}
+.more:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.more:disabled{opacity:.55;cursor:default}
+#player{position:fixed;inset:0;z-index:30;background:var(--bg);overflow:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#setup{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(5,10,13,.72)}
 #player[hidden],#setup[hidden]{display:none}
+.pbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(16,28,34,.94);border-bottom:1px solid var(--line)}
+.pbar .ptitle{font-weight:700}
 .frame{width:100%;aspect-ratio:16/9;background:#000}
 .frame iframe{width:100%;height:100%;border:0}
-.pinfo{padding:12px;max-width:900px;margin:0 auto}
-.pinfo h2{font-size:1.1rem;margin:0 0 4px;line-height:1.3}
-.pinfo p{margin:0 0 14px;color:var(--muted);font-size:.9rem}
-#setup .box{max-width:520px;margin:0 auto;padding:20px 16px}
+@media(min-width:1100px){.frame{max-width:1100px;margin:14px auto 0;border-radius:12px;overflow:hidden}}
+.pinfo{padding:14px 12px;max-width:880px;margin:0 auto}
+.pinfo h2{font-size:1.15rem;margin:0 0 4px;line-height:1.35}
+.pinfo .ch{margin:0;color:var(--muted);font-size:.9rem}
+.pinfo .actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
+.btnlink{display:inline-flex;align-items:center;padding:10px 18px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:700;text-decoration:none}
+.btnlink:hover{filter:brightness(1.07)}
+#ph{margin:12px 0 0;color:var(--muted);font-size:.82rem}
+#setup .box{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+#setup h2{margin:0 0 8px;font-size:1.15rem}
+#setup p{color:var(--muted);font-size:.9rem}
 #setup ol{padding-left:20px;color:var(--muted);font-size:.9rem}
 #setup li{margin-bottom:6px}
-#setup input{width:100%;margin:10px 0}
-.sec{display:flex;align-items:center;gap:10px;margin:18px 0 10px}
-.sec:first-child{margin-top:4px}
-.sec h2{margin:0;font-size:1rem}
+#setup input{width:100%;margin:12px 0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font:inherit}
+#setup input:focus{outline:none;border-color:var(--accent)}
+#setup .actions{display:flex;gap:10px;margin-top:4px}
+.sec{display:flex;align-items:center;gap:10px;margin:20px 0 12px}
+.sec:first-child{margin-top:6px}
+.sec h2{margin:0;font-size:1.02rem;font-weight:700}
 .sec .sub{font-size:.8rem;color:var(--muted)}
 .sec .sp{flex:1}
-.link{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 4px;font:inherit;font-size:.85rem}
-.badge{display:inline-block;font-size:.7rem;color:var(--accent);border:1px solid var(--line);border-radius:20px;padding:2px 8px;margin-top:6px}
-.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px}
-.chip{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:.82rem;color:var(--text);cursor:pointer}
-@media(min-width:700px){.card{grid-template-columns:280px 1fr}.card h3{font-size:1.05rem}}
-@media(prefers-reduced-motion:no-preference){button{transition:background .15s}}
+.link{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 4px;font:inherit;font-size:.85rem;white-space:nowrap}
+.link:hover{text-decoration:underline}
+.badge{display:inline-block;font-size:.72rem;font-weight:600;color:var(--accent);background:rgba(242,193,78,.1);border:1px solid rgba(242,193,78,.35);border-radius:999px;padding:3px 10px;margin-top:8px}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -2px;padding:2px 2px 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:.84rem;color:var(--text);cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.skel{padding:8px;margin-bottom:10px}
+.sk{border-radius:12px;background:linear-gradient(100deg,var(--surface) 40%,var(--surface2) 50%,var(--surface) 60%);background-size:200% 100%;animation:shimmer 1.2s infinite linear}
+.sk-t{aspect-ratio:16/9}
+.sk-l1{height:15px;margin:12px 6px 0}
+.sk-l2{height:12px;margin:9px 6px 4px;width:58%}
+@keyframes shimmer{to{background-position:-200% 0}}
+@media(min-width:700px){.card{grid-template-columns:336px 1fr;gap:14px;align-items:start}.vinfo{padding:4px}.vinfo h3{font-size:1.06rem;-webkit-line-clamp:3}}
+@media(prefers-reduced-motion:reduce){.sk{animation:none}.thumb img{transition:none}}
+@media(prefers-reduced-motion:no-preference){.card,.chip,.iconbtn,#go,.btnlink{transition:background .15s,border-color .15s,color .15s}}
 </style>
 </head>
 <body>
 <header>
-  <button id="home" type="button" aria-label="Ana sayfa" title="Ana sayfa">Ev</button>
-  <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" class="primary" type="button">Ara</button></div>
-  <button id="cfg" type="button" aria-label="Ayarlar">Anahtar</button>
+  <button id="home" class="iconbtn" type="button" aria-label="Ana sayfa" title="Ana sayfa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10.5V21h5v-6h3v6h5V10.5"/></svg></button>
+  <button id="brandBtn" class="brand" type="button" aria-label="no-tube ana sayfa"><img src="icons/icon.svg" alt=""><span>no-tube</span></button>
+  <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg><span class="lbl">Ara</span></button></div>
+  <button id="cfg" class="iconbtn" type="button" aria-label="API anahtarı" title="API anahtarı"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12 21 2"/><path d="m16 7 3 3"/></svg></button>
 </header>
 <main id="res"><div class="msg">Yükleniyor…</div></main>
 
 <section id="player" hidden>
+  <div class="pbar"><button id="back" class="iconbtn" type="button" aria-label="Geri dön"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></svg></button><span class="ptitle">Oynatılıyor</span></div>
   <div class="frame"><iframe id="fr" title="Video oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-  <div class="pinfo"><h2 id="pt"></h2><p id="pc"></p>
-    <button id="back" type="button">Aramaya dön</button>
-    <button id="alt" type="button">Oynatıcıyı değiştir</button>
-    <p id="ph" style="margin-top:12px"></p>
-    <a id="yt" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Videoyu YouTube'da aç</a>
+  <div class="pinfo"><h2 id="pt"></h2><p id="pc" class="ch"></p>
+    <div class="actions"><button id="alt" type="button">Oynatıcıyı değiştir</button><a id="yt" class="btnlink" target="_blank" rel="noopener noreferrer">YouTube'da aç</a></div>
+    <p id="ph"></p>
   </div>
 </section>
 
@@ -86,8 +127,7 @@ main{max-width:900px;margin:0 auto;padding:12px}
       <li>Anahtarı sitenin adresiyle sınırla (HTTP yönlendiren) ve yalnızca YouTube Data API v3'e izin ver.</li>
     </ol>
     <input id="k" type="password" placeholder="API anahtarını yapıştır" autocomplete="off">
-    <button id="ks" class="primary" type="button">Kaydet</button>
-    <button id="kc" type="button">Vazgeç</button>
+    <div class="actions"><button id="ks" class="primary" type="button">Kaydet</button><button id="kc" type="button">Vazgeç</button></div>
   </div>
 </section>
 
@@ -225,6 +265,7 @@ $('ks').onclick = () => {
   if (homeMode) showHome(); else if (query) search(query);
 };
 $('home').onclick = goHome;
+$('brandBtn').onclick = goHome;
 function goHome(){ homeMode = true; query = ''; next = ''; $('q').value = ''; showHome(); }
 
 const normSearch = it => ({ id: it.id.videoId, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
@@ -232,11 +273,22 @@ const normPopular = it => ({ id: it.id, title: dec(it.snippet.title), channel: d
 
 function makeCard(v, opts = {}){
   const img = el('img', { src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
-  const info = el('div', {}, el('h3', { textContent: v.title }), el('p', { textContent: v.channel + (v.publishedAt ? ' • ' + fmtDate(v.publishedAt) : '') }));
+  const thumb = el('div', { className: 'thumb' }, img);
+  const info = el('div', { className: 'vinfo' }, el('h3', { textContent: v.title }), el('p', { className: 'meta', textContent: v.channel + (v.publishedAt ? ' • ' + fmtDate(v.publishedAt) : '') }));
   if (opts.badge) info.append(el('span', { className: 'badge', textContent: opts.badge }));
-  const card = el('button', { className: 'card', type: 'button' }, img, info);
+  const card = el('button', { className: 'card', type: 'button' }, thumb, info);
   card.onclick = () => play(v);
   return card;
+}
+// iskelet kartlar: API beklenirken YouTube tarzı gri bloklar
+function skeletons(box, n){
+  for (let i = 0; i < n; i++) {
+    const s = el('div', { className: 'skel', ariaHidden: 'true' },
+      el('div', { className: 'sk sk-t' }),
+      el('div', { className: 'sk sk-l1' }),
+      el('div', { className: 'sk sk-l2' }));
+    box.append(s);
+  }
 }
 function section(title, sub){
   const h = el('div', { className: 'sec' }, el('h2', { textContent: title }));
@@ -327,6 +379,7 @@ async function showHome(force){
     }
   }
   feedBox.append(el('div', { className: 'msg', textContent: hasSignal ? 'İlgilerine göre öneriler hazırlanıyor…' : 'Trendler yükleniyor…' }));
+  skeletons(feedBox, 3);
   try {
     // A) trendler (1 kota) — her zaman taban
     const u = new URL('https://www.googleapis.com/youtube/v3/videos');
@@ -409,7 +462,7 @@ async function search(q, token){
   if (!key) { showSetup(true); return; }
   const u = new URL('https://www.googleapis.com/youtube/v3/search');
   u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
-  if (!token) msg('Aranıyor…');
+  if (!token) { $('res').replaceChildren(); skeletons($('res'), 4); }
   try {
     const r = await fetch(u);
     const d = await r.json();
@@ -431,7 +484,8 @@ async function channelVideos(channelId, channelName){
   homeMode = false;
   query = '';
   if (!key) { showSetup(true); return; }
-  msg('“' + (channelName || 'kanal') + '” kanalından son videolar getiriliyor…');
+  $('res').replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
+  skeletons($('res'), 4);
   try {
     const u = new URL('https://www.googleapis.com/youtube/v3/search');
     u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', order: 'date', channelId, key });
