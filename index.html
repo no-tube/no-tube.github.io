@@ -148,9 +148,39 @@ function buildProfile(hist, searches){
 function scoreVideo(v, profile, watchedIds){
   let s = 0;
   const c = v.channelId && profile.chan.get(v.channelId);
-  if (c) s += c.w * 2; // sadece kanal bağı: aynı kanaldan video +puan
+  // sqrt sönümü: 5 kez izlenen kanal, 1 kez izleneni ezmesin — yeni ilgiler de yüzeye çıksın
+  if (c) s += 4 * Math.sqrt(c.w);
   if (watchedIds.has(v.id)) s -= 8; // izleneni geri it
   return s;
+}
+// harmanlama: skor sırası yerine kaynaklar arası round-robin — tek konu sayfayı ele geçiremesin
+// aynı kanal üst üste en fazla 2 kez gelir
+function blendFeed(videos){
+  const groups = { q: [], ch: [], tr: [] };
+  videos.forEach(v => {
+    if (v.src === 'trend') groups.tr.push(v);
+    else if (v.src.indexOf('sana özel arama:') === 0) groups.q.push(v);
+    else groups.ch.push(v);
+  });
+  Object.values(groups).forEach(g => g.sort((a, b) => b._s - a._s));
+  const order = ['q', 'ch', 'tr'];
+  const out = [];
+  for (;;) {
+    let moved = false;
+    for (const k of order) {
+      const g = groups[k];
+      if (!g.length) continue;
+      let idx = g.findIndex(v => {
+        const n = out.length;
+        return n < 2 || !(out[n - 1].channelId && out[n - 1].channelId === v.channelId && out[n - 2].channelId === v.channelId);
+      });
+      if (idx < 0) idx = 0;
+      out.push(g.splice(idx, 1)[0]);
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return out;
 }
 // rozetler: sadece kanal + hangi aramandan geldiği (başlık kelimesi yok)
 function reasonFor(v, profile, chanName){
@@ -224,7 +254,7 @@ async function showHome(force){
   const hasSignal = hist.length || searches.length;
   root.replaceChildren();
 
-  // 1) Sinyaller (çevrimdışı da çalışır) — "Tekrar izle" yok: izlediklerin sadece kanal skorunu besler
+  // 1) Sinyaller (çevrimdışı da çalışır) — izlediklerin listelenmez, sessizce kanal skorunu besler
   if (!hasSignal) {
     root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin ya da aramadın. Aşağıdaki trendlerden başla; izledikçe kanalların, aradıkça sorguların anasayfayı şekillendirecek.' }));
   } else {
@@ -256,13 +286,7 @@ async function showHome(force){
       });
       root.append(chipsS);
     }
-    if (hist.length) {
-      const hs = section('İzleme', hist.length + ' video • skorlarda kullanılıyor');
-      const clr = el('button', { className: 'link', type: 'button', textContent: 'İzleme geçmişini temizle' });
-      clr.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
-      hs.append(clr);
-      root.append(hs);
-    }
+    // izleme listesi gösterilmez — izlediklerin sessizce kanal skorunu besler
   }
 
   // 2) Öneriler / trendler
@@ -273,6 +297,11 @@ async function showHome(force){
     const yenile = el('button', { className: 'link', type: 'button', textContent: 'Önerileri yenile' });
     yenile.onclick = () => { recCache.clear(); showHome(true); };
     fs.append(yenile);
+    if (hist.length) {
+      const clrH = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
+      clrH.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
+      fs.append(clrH);
+    }
   }
   root.append(fs);
   const feedBox = el('div', {});
@@ -346,7 +375,7 @@ async function showHome(force){
     let videos = merged.map(v => ({ ...v, _s: hasSignal ? scoreVideo(v, prof, watchedIds) : 0, _why: hasSignal ? reasonFor(v, prof, chanName[v.channelId]) : [] }));
     // kişisel adaylara küçük boost: sırf trendler ezmesin (kanal + arama adayları)
     videos.forEach(v => { if (v.src !== 'trend') v._s += 1.5; });
-    videos.sort((a, b) => b._s - a._s);
+    videos = blendFeed(videos); // skor sırası değil, kaynaklar arası harman
     recCache.set(videos, cacheKey);
     renderFeed(feedBox, videos, hist, prof, false);
   } catch (e) {
