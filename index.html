@@ -145,6 +145,7 @@ function load(){
   $('ph').textContent = location.protocol.startsWith('http')
     ? 'Oynatıcı: ' + hosts[hostIdx] + ' (hata verirse "Oynatıcıyı değiştir"e bas)'
     : 'Bu sayfa dosya olarak açılmış (' + location.protocol + '). YouTube bu durumda Hata 153 verir. Sayfayı bir https adresinden aç ya da aşağıdaki bağlantıyı kullan.';
+  $('ph').textContent += ' | Sayfa adresi: ' + location.origin;
 }
 function play(id, title, channel){
   cur = id;
