@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101C22">
+<title>Kendi video arayüzüm</title>
+<style>
+:root{--bg:#101C22;--surface:#1A2B33;--line:#2A404A;--text:#E8F0EE;--muted:#8EA6AB;--accent:#F2C14E;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px}
+#f{display:flex;flex:1;gap:8px;min-width:0}
+input{flex:1;min-width:0;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:11px 12px;font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;cursor:pointer}
+button.primary{background:var(--accent);color:#1b1500;border-color:var(--accent);font-weight:600}
+main{max-width:900px;margin:0 auto;padding:12px}
+.card{display:grid;grid-template-columns:40% 1fr;gap:12px;width:100%;text-align:left;margin-bottom:12px;padding:0;background:none;border:0;color:inherit}
+.card img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--surface)}
+.card h3{margin:0 0 4px;font-size:.95rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card p{margin:0;font-size:.8rem;color:var(--muted)}
+.msg{padding:24px 8px;color:var(--muted);text-align:center}
+.msg.err{color:#ff9d8a}
+.more{display:block;margin:8px auto 24px}
+#player,#setup{position:fixed;inset:0;z-index:10;background:var(--bg);overflow:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#player[hidden],#setup[hidden]{display:none}
+.frame{width:100%;aspect-ratio:16/9;background:#000}
+.frame iframe{width:100%;height:100%;border:0}
+.pinfo{padding:12px;max-width:900px;margin:0 auto}
+.pinfo h2{font-size:1.1rem;margin:0 0 4px;line-height:1.3}
+.pinfo p{margin:0 0 14px;color:var(--muted);font-size:.9rem}
+#setup .box{max-width:520px;margin:0 auto;padding:20px 16px}
+#setup ol{padding-left:20px;color:var(--muted);font-size:.9rem}
+#setup li{margin-bottom:6px}
+#setup input{width:100%;margin:10px 0}
+@media(min-width:700px){.card{grid-template-columns:280px 1fr}.card h3{font-size:1.05rem}}
+@media(prefers-reduced-motion:no-preference){button{transition:background .15s}}
+</style>
+</head>
+<body>
+<header>
+  <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" class="primary" type="button">Ara</button></div>
+  <button id="cfg" type="button" aria-label="Ayarlar">Anahtar</button>
+</header>
+<main id="res"><div class="msg">Aramak istediğin şeyi yaz.</div></main>
+
+<section id="player" hidden>
+  <div class="frame"><iframe id="fr" title="Video oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+  <div class="pinfo"><h2 id="pt"></h2><p id="pc"></p>
+    <button id="back" type="button">Aramaya dön</button>
+    <button id="alt" type="button">Oynatıcıyı değiştir</button>
+    <p id="ph" style="margin-top:12px"></p>
+    <a id="yt" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Videoyu YouTube'da aç</a>
+  </div>
+</section>
+
+<section id="setup" hidden>
+  <div class="box">
+    <h2>YouTube API anahtarı</h2>
+    <p>Arama için senin kendi ücretsiz anahtarın gerekiyor. Anahtar yalnızca bu cihazın tarayıcısında saklanır.</p>
+    <ol>
+      <li>console.cloud.google.com adresinde yeni proje oluştur.</li>
+      <li>"YouTube Data API v3" servisini etkinleştir.</li>
+      <li>Kimlik bilgileri bölümünden API anahtarı oluştur.</li>
+      <li>Anahtarı sitenin adresiyle sınırla (HTTP yönlendiren) ve yalnızca YouTube Data API v3'e izin ver.</li>
+    </ol>
+    <input id="k" type="password" placeholder="API anahtarını yapıştır" autocomplete="off">
+    <button id="ks" class="primary" type="button">Kaydet</button>
+    <button id="kc" type="button">Vazgeç</button>
+  </div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+const store = {
+  get(){ try { return localStorage.getItem('ytkey') || ''; } catch(e){ return ''; } },
+  set(v){ try { localStorage.setItem('ytkey', v); } catch(e){} }
+};
+let key = store.get(), query = '', next = '';
+
+const dec = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
+const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); kids.forEach(k => n.append(k)); return n; };
+const msg = (t, err) => $('res').replaceChildren(el('div', { className: 'msg' + (err ? ' err' : ''), textContent: t }));
+
+function showSetup(open){ $('setup').hidden = !open; if (open) { $('k').value = ''; $('k').focus(); } }
+$('cfg').onclick = () => showSetup(true);
+$('kc').onclick = () => showSetup(false);
+$('ks').onclick = () => {
+  const v = $('k').value.trim();
+  if (!v) return;
+  key = v; store.set(v); showSetup(false);
+  if (query) search(query);
+};
+
+async function search(q, token){
+  if (!key) { showSetup(true); return; }
+  const u = new URL('https://www.googleapis.com/youtube/v3/search');
+  u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
+  if (!token) msg('Aranıyor…');
+  try {
+    const r = await fetch(u);
+    const d = await r.json();
+    if (!r.ok) {
+      const reason = d.error?.errors?.[0]?.reason || '';
+      if (reason === 'quotaExceeded') return msg('Günlük arama kotan doldu. Yarın tekrar dene.', true);
+      if (/keyInvalid|badRequest/.test(reason) || r.status === 400) return msg('API anahtarı geçersiz. "Anahtar" düğmesinden yenisini gir.', true);
+      if (r.status === 403) return msg('Erişim reddedildi. Anahtarın bu adresten kullanılmasına izin verilmiş mi kontrol et.', true);
+      return msg('Arama başarısız oldu (' + r.status + ').', true);
+    }
+    next = d.nextPageToken || '';
+    render(d.items || [], !!token);
+  } catch (e) {
+    msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
+  }
+}
+
+function render(items, append){
+  const root = $('res');
+  if (!append) root.replaceChildren();
+  root.querySelector('.more')?.remove();
+  if (!items.length && !append) return msg('Sonuç bulunamadı. Başka bir arama dene.');
+  items.forEach(it => {
+    const s = it.snippet, id = it.id.videoId;
+    const img = el('img', { src: s.thumbnails.medium.url, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
+    const when = new Date(s.publishedAt).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' });
+    const info = el('div', {}, el('h3', { textContent: dec(s.title) }), el('p', { textContent: dec(s.channelTitle) + ' • ' + when }));
+    const card = el('button', { className: 'card', type: 'button' }, img, info);
+    card.onclick = () => play(id, dec(s.title), dec(s.channelTitle));
+    root.append(card);
+  });
+  if (next) {
+    const b = el('button', { className: 'more', type: 'button', textContent: 'Daha fazla göster' });
+    b.onclick = () => { b.disabled = true; search(query, next); };
+    root.append(b);
+  }
+}
+
+const hosts = ['www.youtube-nocookie.com', 'www.youtube.com'];
+let hostIdx = 0, cur = '';
+function load(){
+  const o = location.protocol.startsWith('http') ? '&origin=' + encodeURIComponent(location.origin) : '';
+  $('fr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(cur) + '?autoplay=1&playsinline=1&rel=0' + o;
+  $('ph').textContent = location.protocol.startsWith('http')
+    ? 'Oynatıcı: ' + hosts[hostIdx] + ' (hata verirse "Oynatıcıyı değiştir"e bas)'
+    : 'Bu sayfa dosya olarak açılmış (' + location.protocol + '). YouTube bu durumda Hata 153 verir. Sayfayı bir https adresinden aç ya da aşağıdaki bağlantıyı kullan.';
+}
+function play(id, title, channel){
+  cur = id;
+  $('pt').textContent = title;
+  $('pc').textContent = channel;
+  $('yt').href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(id);
+  load();
+  $('player').hidden = false;
+  history.pushState({ p: 1 }, '');
+}
+$('alt').onclick = () => { hostIdx = (hostIdx + 1) % hosts.length; load(); };
+function closePlayer(){ $('fr').src = 'about:blank'; $('player').hidden = true; }
+$('back').onclick = () => history.back();
+window.addEventListener('popstate', closePlayer);
+
+function doSearch(){
+  query = $('q').value.trim();
+  if (!query) return;
+  next = '';
+  $('q').blur();
+  search(query);
+}
+$('go').addEventListener('click', doSearch);
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+window.addEventListener('error', e => msg('Hata: ' + e.message, true));
+window.addEventListener('unhandledrejection', e => msg('Hata: ' + (e.reason && e.reason.message || e.reason), true));
+if (!key) showSetup(true);
+</script>
+</body>
+</html>
