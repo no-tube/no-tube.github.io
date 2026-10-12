@@ -364,6 +364,20 @@ $('home').onclick = goHome;
 $('brandBtn').onclick = goHome;
 let mode = 'home'; // 'home' | 'shorts'
 let homeBusy = false, shortsBusy = false; // üst üste istek kilidi (429 hız sınırı koruması)
+const cds = { home: 0, shorts: 0 };
+// 429 sayacı: buton 60 sn kilitli kalır, çünkü beklerken basılan her istek ceza süresini uzatır
+function cooldownBtn(box, slot, label, fn){
+  const rb = el('button', { className: 'more', type: 'button', textContent: label + ' (60)', disabled: true });
+  box.append(rb);
+  clearInterval(cds[slot]);
+  let s = 60;
+  cds[slot] = setInterval(() => {
+    s--;
+    if (!document.body.contains(rb)) { clearInterval(cds[slot]); cds[slot] = 0; return; }
+    if (s <= 0) { clearInterval(cds[slot]); cds[slot] = 0; rb.disabled = false; rb.textContent = label; rb.onclick = fn; }
+    else rb.textContent = label + ' (' + s + ')';
+  }, 1000);
+}
 function setTab(m){
   mode = m;
   $('tabHome').classList.toggle('on', m === 'home');
@@ -438,6 +452,7 @@ $('sheetBg').onclick = closeSheet;
 // Anasayfa: geçmiş + kişisel adaylar + trendler (kişisel arama kota yakar, 20 dk önbellekli)
 async function showHome(force){
   if (homeBusy) return;
+  clearInterval(cds.home);
   homeMode = true;
   const root = $('res');
   const hist = histStore.get();
@@ -565,10 +580,8 @@ async function showHome(force){
     const reason = d?.error?.errors?.[0]?.reason || '';
     if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Kanalların ve aramaların kayıtlı, yarın öneriler döner.' })); return; }
     if (r && r.status === 429) {
-      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. 1 dk bekle, sonra Tekrar dene.' }));
-      const rb = el('button', { className: 'more', type: 'button', textContent: 'Tekrar dene' });
-      rb.onclick = () => showHome(true);
-      feedBox.append(rb);
+      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. Sayaç bitene kadar hiçbir şeye basma, her istek süreyi uzatır.' }));
+      cooldownBtn(feedBox, 'home', 'Tekrar dene', () => showHome(true));
       return;
     }
     if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
@@ -598,6 +611,7 @@ function renderFeed(feedBox, videos, hist, prof, fromCache){
 let sque = [], sidx = 0;
 async function showShorts(force){
   if (shortsBusy) return;
+  clearInterval(cds.shorts);
   setTab('shorts');
   homeMode = false;
   const root = $('res');
@@ -660,10 +674,8 @@ async function showShorts(force){
       const reason0 = (d0.error && d0.error.errors && d0.error.errors[0] && d0.error.errors[0].reason) || (e0 instanceof TypeError ? 'ağ hatası' : '');
       if (reason0 === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
       if (r0 && r0.status === 429) {
-        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. 1 dk bekle, sonra Tekrar dene.' }));
-        const rb = el('button', { className: 'more', type: 'button', textContent: 'Tekrar dene' });
-        rb.onclick = () => showShorts(true);
-        box.append(rb);
+        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. Sayaç bitene kadar hiçbir şeye basma, her istek süreyi uzatır.' }));
+        cooldownBtn(box, 'shorts', 'Tekrar dene', () => showShorts(true));
         return;
       }
       if (r0 && (r0.status === 400 || r0.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu (HTTP ' + r0.status + '). "Anahtar" düğmesinden kontrol et.' })); return; }
