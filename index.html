@@ -122,53 +122,40 @@ function recordSearch(q){
 }
 let key = store.get(), query = '', next = '', homeMode = true;
 
-// --- Öneri algoritması: tamamı cihazda, sunucu yok, geçmiş dışarı gitmez ---
-const STOP = new Set(('ve veya bir bu şu o ne ile için gibi çok daha en mi mı mu mü de da ki ise ama fakat çünkü eğer kadar göre hem the and for with from that this are was were has have not you your ile ilgili olarak nasıl neden niye').split(' '));
-const tokens = t => (t || '').toLocaleLowerCase('tr-TR').split(/[^a-zçğıöşüâîû0-9]+/i).filter(w => w.length >= 3 && !STOP.has(w)).slice(0, 24);
-
+// --- Öneri algoritması: başlıklardan çıkarım YOK, sadece kanallar + senin aramaların ---
+// Neden: başlık kelimesi eşleşmesi ("değiştim" videosu -> her yer "sad edit") gürültü üretiyordu.
 function buildProfile(hist, searches){
-  const chan = new Map(), kw = new Map();
+  const chan = new Map(); // channelId -> {w, name}
   const now = Date.now();
   (hist || []).forEach(h => {
+    if (!h.channelId) return;
     const ageDays = Math.max(0, (now - (h.at || now)) / 864e5);
     const decay = Math.pow(0.93, ageDays); // eski izlemeler yavaşça unutulur
-    const w = decay * (1 + Math.min(h.count || 1, 5) * 0.3);
-    if (h.channelId) chan.set(h.channelId, (chan.get(h.channelId) || 0) + w * 3);
-    tokens(h.title).forEach(t => kw.set(t, (kw.get(t) || 0) + w));
+    const w = decay * (1 + Math.min(h.count || 1, 5) * 0.3) * 3;
+    const prev = chan.get(h.channelId) || { w: 0, name: h.channel };
+    chan.set(h.channelId, { w: prev.w + w, name: h.channel || prev.name });
   });
-  // aramalar da profile girer: izleme kadar güçlü değil (0.6x) ama izlemeden önce sinyal verir
-  (searches || []).forEach(s => {
-    const ageDays = Math.max(0, (now - (s.at || now)) / 864e5);
-    const decay = Math.pow(0.90, ageDays);
-    const w = decay * (1 + Math.min(s.count || 1, 5) * 0.25) * 0.6;
-    tokens(s.q).forEach(t => kw.set(t, (kw.get(t) || 0) + w));
-  });
-  return { chan, kw };
+  // ham arama sorguların (senin kendi cümlelerin, başlıklardan türetilmiş kelime değil)
+  const queries = (searches || [])
+    .map(s => {
+      const ageDays = Math.max(0, (now - (s.at || now)) / 864e5);
+      return { q: s.q, w: Math.pow(0.90, ageDays) * (1 + Math.min(s.count || 1, 5) * 0.25) };
+    })
+    .sort((a, b) => b.w - a.w)
+    .slice(0, 4);
+  return { chan, queries };
 }
 function scoreVideo(v, profile, watchedIds){
   let s = 0;
-  if (profile.chan.get(v.channelId)) s += profile.chan.get(v.channelId) * 2;
-  tokens(v.title).forEach(t => { const hit = kwHit(t, profile.kw); if (hit) s += hit.w * hit.f; });
-  if (watchedIds.has(v.id)) s -= 8; // izleneni öneride geri it, geçmişte zaten gösteriliyor
+  const c = v.channelId && profile.chan.get(v.channelId);
+  if (c) s += c.w * 2; // sadece kanal bağı: aynı kanaldan video +puan
+  if (watchedIds.has(v.id)) s -= 8; // izleneni geri it
   return s;
 }
-// Türkçe ekler ("satranç" vs "satrançta") birebir tutmaz — 5 harf kök eşleşmesine kısmi puan
-function kwHit(t, kw){
-  if (kw.get(t)) return { key: t, w: kw.get(t), f: 1 };
-  if (t.length >= 5) {
-    const stem = t.slice(0, 5);
-    let best = null;
-    kw.forEach((w, k) => { if (k.length >= 5 && k.slice(0, 5) === stem && (!best || w > best.w)) best = { key: k, w, f: 0.6 }; });
-    if (best) return best;
-  }
-  return null;
-}
-// eşleşme nedenleri: rozette gösterilir ("lofi ilgin", "X kanalı")
+// rozetler: sadece kanal + hangi aramandan geldiği (başlık kelimesi yok)
 function reasonFor(v, profile, chanName){
   const out = [];
-  if (v.channelId && profile.chan.get(v.channelId)) out.push((chanName || v.channel || 'kanal') + ' sık izlediğin');
-  const hits = tokens(v.title).map(t => kwHit(t, profile.kw)).filter(Boolean).sort((a, b) => (b.w * b.f) - (a.w * a.f)).slice(0, 2);
-  hits.forEach(h => out.push(h.key + ' ilgin'));
+  if (v.channelId && profile.chan.get(v.channelId)) out.push((chanName || v.channel || 'kanal') + ' sık izlediğin kanal');
   return out;
 }
 const recCache = {
@@ -237,19 +224,24 @@ async function showHome(force){
   const hasSignal = hist.length || searches.length;
   root.replaceChildren();
 
-  // 1) Geçmiş bölümü (çevrimdışı da çalışır)
-  const hs = section('Tekrar izle', hist.length ? hist.length + ' video' : '');
-  if (hist.length) {
-    const clr = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
-    clr.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
-    hs.append(clr);
-  }
-  root.append(hs);
-  if (!hist.length && !searches.length) {
-    root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin ya da aramadın. Aşağıdaki trendlerden başla, anasayfa zamanla sana göre şekillenecek.' }));
+  // 1) Sinyaller (çevrimdışı da çalışır) — "Tekrar izle" yok: izlediklerin sadece kanal skorunu besler
+  if (!hasSignal) {
+    root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin ya da aramadın. Aşağıdaki trendlerden başla; izledikçe kanalların, aradıkça sorguların anasayfayı şekillendirecek.' }));
   } else {
-    hist.slice(0, 8).forEach(h => root.append(makeCard({ id: h.id, title: h.title, channel: h.channel, channelId: h.channelId, thumb: h.thumb }, { badge: (h.count > 1 ? h.count + ' kez izlendi' : 'izlendi') })));
-    // son aramalar: ham sorgular, tek dokunuşla tekrar ara
+    const profSig = buildProfile(hist, searches);
+    // sık izlediğin kanallar: dokun o kanalın son videolarını getir
+    const topChans = [...profSig.chan.entries()].sort((a, b) => b[1].w - a[1].w).slice(0, 6);
+    if (topChans.length) {
+      root.append(el('div', { className: 'sec' }, el('h2', { textContent: 'Kanalların' })));
+      const chipsC = el('div', { className: 'chips' });
+      topChans.forEach(([id, c]) => {
+        const b = el('button', { className: 'chip', type: 'button', textContent: c.name || 'kanal' });
+        b.onclick = () => channelVideos(id, c.name);
+        chipsC.append(b);
+      });
+      root.append(chipsC);
+    }
+    // son aramalar: ham sorguların, tek dokunuşla tekrar ara
     if (searches.length) {
       const ss = section('Son aramalar', searches.length + ' sorgu');
       const clrS = el('button', { className: 'link', type: 'button', textContent: 'Aramaları temizle' });
@@ -264,18 +256,12 @@ async function showHome(force){
       });
       root.append(chipsS);
     }
-    // ilgi etiketleri: izleme + arama kelimeleri, tek dokunuşla arama
-    const prof = buildProfile(hist, searches);
-    const topKw = [...prof.kw.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
-    if (topKw.length) {
-      const chips = el('div', { className: 'chips' });
-      topKw.forEach(w => {
-        const c = el('button', { className: 'chip', type: 'button', textContent: w });
-        c.onclick = () => { $('q').value = w; doSearch(); };
-        chips.append(c);
-      });
-      root.append(el('div', { className: 'sec' }, el('h2', { textContent: 'İlgilerin' }), el('span', { className: 'sub', textContent: 'izleme + arama karışımı' })));
-      root.append(chips);
+    if (hist.length) {
+      const hs = section('İzleme', hist.length + ' video • skorlarda kullanılıyor');
+      const clr = el('button', { className: 'link', type: 'button', textContent: 'İzleme geçmişini temizle' });
+      clr.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
+      hs.append(clr);
+      root.append(hs);
     }
   }
 
@@ -299,10 +285,11 @@ async function showHome(force){
     feedBox.append(b);
     return;
   }
-  // önbellek: aynı ilgiyle 20 dk içinde tekrar kota harcama
-  const prof = prof0 || { chan: new Map(), kw: new Map() };
-  const topKw = [...prof.kw.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w]) => w);
-  const cacheKey = hasSignal ? topKw.join('|') + '#' + hist.length + 'v' + searches.length + 's' : 'trend';
+  // önbellek: aynı sinyalle 20 dk içinde tekrar kota harcama
+  const prof = prof0 || { chan: new Map(), queries: [] };
+  const topChanIds = [...prof.chan.entries()].sort((a, b) => b[1].w - a[1].w).slice(0, 2).map(([id]) => id);
+  const topQueries = prof.queries.slice(0, 2).map(x => x.q);
+  const cacheKey = hasSignal ? [...topChanIds, ...topQueries].join('|') + '#' + hist.length + 'v' + searches.length + 's' : 'trend';
   if (!force) {
     const cached = recCache.get();
     if (cached && cached.q === cacheKey && cached.feed?.length) {
@@ -320,24 +307,33 @@ async function showHome(force){
     if (!r.ok) throw { resp: r, data: d };
     const trends = (d.items || []).map(normPopular).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'trend' }));
 
-    // B) kişisel adaylar (100 kota/arama) — izleme ya da arama sinyali varsa, en fazla 2 arama
+    // B) kişisel adaylar (100 kota/arama) — en fazla 2 arama:
+    //   1) en güçlü ham sorgun (senin cümlen), 2) en çok izlediğin kanalın son videoları (channelId)
     let personal = [];
-    if (hasSignal && topKw.length) {
-      const queries = [topKw.slice(0, 2).join(' ')];
-      const topChan = [...prof.chan.entries()].sort((a, b) => b[1] - a[1])[0];
-      if (topChan && topChan[1] >= 2) {
-        const chHist = hist.find(h => h.channelId === topChan[0]);
-        if (chHist) queries.push(chHist.channel);
-      }
-      for (const q of queries.slice(0, 2)) {
+    if (hasSignal) {
+      if (topQueries.length) {
+        const q = topQueries[0];
         try {
           const su = new URL('https://www.googleapis.com/youtube/v3/search');
           su.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', q, key });
           const sr = await fetch(su);
           const sd = await sr.json();
           if (sr.ok) personal.push(...(sd.items || []).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'sana özel arama: ' + q })));
-          else if (sd.error?.errors?.[0]?.reason === 'quotaExceeded') break;
-        } catch (e) { /* kişisel arama patlarsa trendlere düş */ }
+          else if (sd.error?.errors?.[0]?.reason === 'quotaExceeded') throw { resp: sr, data: sd };
+        } catch (e) { if (e?.resp) throw e; /* ağ patlarsa trendlere düş */ }
+      }
+      if (topChanIds.length) {
+        const cid = topChanIds[0];
+        try {
+          const cu = new URL('https://www.googleapis.com/youtube/v3/search');
+          cu.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', order: 'date', channelId: cid, key });
+          const cr = await fetch(cu);
+          const cd = await cr.json();
+          if (cr.ok) {
+            const cname = prof.chan.get(cid)?.name || 'kanalın';
+            personal.push(...(cd.items || []).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: cname + ' kanalından yeni' })));
+          }
+        } catch (e) { /* kanal araması patlarsa sorun değil */ }
       }
     }
 
@@ -348,17 +344,17 @@ async function showHome(force){
     const chanName = {};
     hist.forEach(h => { if (h.channelId && !chanName[h.channelId]) chanName[h.channelId] = h.channel; });
     let videos = merged.map(v => ({ ...v, _s: hasSignal ? scoreVideo(v, prof, watchedIds) : 0, _why: hasSignal ? reasonFor(v, prof, chanName[v.channelId]) : [] }));
-    // kişisel adaylara küçük boost: sırf trendler ezmesin
-    videos.forEach(v => { if (v.src.startsWith('sana özel')) v._s += 1.5; });
+    // kişisel adaylara küçük boost: sırf trendler ezmesin (kanal + arama adayları)
+    videos.forEach(v => { if (v.src !== 'trend') v._s += 1.5; });
     videos.sort((a, b) => b._s - a._s);
     recCache.set(videos, cacheKey);
     renderFeed(feedBox, videos, hist, prof, false);
   } catch (e) {
     const r = e?.resp, d = e?.data;
     const reason = d?.error?.errors?.[0]?.reason || '';
-    if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Geçmişin yukarıda duruyor, yarın öneriler döner.' })); return; }
+    if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Kanalların ve aramaların kayıtlı, yarın öneriler döner.' })); return; }
     if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
-    feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Geçmiş çevrimdışı kullanılabilir.' }));
+    feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Son aramaların çevrimdışı kullanılabilir.' }));
   }
 }
 
@@ -368,13 +364,13 @@ function renderFeed(feedBox, videos, hist, prof, fromCache){
   const watchedIds = new Set(hist.map(h => h.id));
   const nPersonal = videos.filter(v => v._s > 0).length;
   if (hist.length || searchStore.get().length) {
-    feedBox.append(el('div', { className: 'msg', textContent: nPersonal ? nPersonal + ' video ilgilerinle eşleşti' + (fromCache ? ' (önbellek)' : '') + '. Rozetler nedenini söyler.' : 'Trendler ilgilerinle eşleşmedi — bir şeyler izle/ara ya da "Önerileri yenile"ye bas. Rozet çıkınca kişiselleşmiş demektir.' }));
+    feedBox.append(el('div', { className: 'msg', textContent: nPersonal ? nPersonal + ' video kanalların/aramalarınla eşleşti' + (fromCache ? ' (önbellek)' : '') + '. Rozetler nedenini söyler.' : 'Trendler kanallarınla/aramalarınla eşleşmedi — bir şeyler izle/ara ya da "Önerileri yenile"ye bas. Rozet çıkınca kişiselleşmiş demektir.' }));
   }
   videos.slice(0, 20).forEach(v => {
     let badge = '';
     if (watchedIds.has(v.id)) badge = 'izlendi';
     else if (v._why?.length) badge = v._why.slice(0, 2).join(' • ');
-    else if (v.src?.startsWith('sana özel')) badge = 'sana özel arama';
+    else if (v.src && v.src !== 'trend') badge = v.src;
     feedBox.append(makeCard(v, badge ? { badge } : {}));
   });
 }
@@ -397,6 +393,33 @@ async function search(q, token){
     }
     next = d.nextPageToken || '';
     renderSearch((d.items || []).map(normSearch), !!token);
+  } catch (e) {
+    msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
+  }
+}
+
+async function channelVideos(channelId, channelName){
+  homeMode = false;
+  query = '';
+  if (!key) { showSetup(true); return; }
+  msg('“' + (channelName || 'kanal') + '” kanalından son videolar getiriliyor…');
+  try {
+    const u = new URL('https://www.googleapis.com/youtube/v3/search');
+    u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', order: 'date', channelId, key });
+    const r = await fetch(u);
+    const d = await r.json();
+    if (!r.ok) {
+      const reason = d.error?.errors?.[0]?.reason || '';
+      if (reason === 'quotaExceeded') return msg('Günlük kotan doldu. Yarın tekrar dene.', true);
+      return msg('Kanal videoları alınamadı (' + r.status + ').', true);
+    }
+    next = '';
+    const items = (d.items || []).map(normSearch);
+    const root = $('res');
+    root.replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
+    const watchedIds = new Set(histStore.get().map(h => h.id));
+    if (!items.length) { root.append(el('div', { className: 'msg', textContent: 'Bu kanaldan video bulunamadı.' })); return; }
+    items.forEach(v => root.append(makeCard(v, watchedIds.has(v.id) ? { badge: 'izlendi' } : {})));
   } catch (e) {
     msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
   }
