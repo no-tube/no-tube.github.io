@@ -95,7 +95,34 @@ main{max-width:880px;margin:0 auto;padding:14px 12px 64px}
 @keyframes shimmer{to{background-position:-200% 0}}
 @media(min-width:700px){.card{grid-template-columns:336px 1fr;gap:14px;align-items:start}.vinfo{padding:4px}.vinfo h3{font-size:1.06rem;-webkit-line-clamp:3}}
 @media(prefers-reduced-motion:reduce){.sk{animation:none}.thumb img{transition:none}}
-@media(prefers-reduced-motion:no-preference){.card,.chip,.iconbtn,#go,.btnlink{transition:background .15s,border-color .15s,color .15s}}
+@media(prefers-reduced-motion:no-preference){.card,.chip,.iconbtn,#go,.btnlink,.tab,.scard{transition:background .15s,border-color .15s,color .15s}}
+header{flex-wrap:wrap}
+.tabs{flex-basis:100%;display:flex;gap:8px;padding:2px 4px 6px}
+.tab{flex:1;background:transparent;border:1px solid transparent;border-radius:999px;padding:8px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
+.tab:hover{color:var(--text)}
+.tab.on{background:var(--surface2);border-color:var(--line);color:var(--text)}
+.sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:700px){.sgrid{grid-template-columns:repeat(3,1fr)}.sgrid{max-width:100%}}
+.scard{background:transparent;border:1px solid transparent;border-radius:var(--radius);padding:6px;color:inherit;cursor:pointer;text-align:left}
+.scard:hover{background:var(--surface);border-color:var(--line)}
+.sthumb{position:relative;overflow:hidden;border-radius:12px;background:var(--surface2);aspect-ratio:9/16}
+.sthumb img{width:100%;height:100%;object-fit:cover;display:block}
+.sinfo{padding:8px 4px 4px}
+.sinfo h4{margin:0 0 2px;font-size:.82rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sinfo p{margin:0;font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#shorts{position:fixed;inset:0;z-index:35;background:#000}
+#shorts[hidden]{display:none}
+.sstage{position:relative;height:100dvh;max-width:100vw;aspect-ratio:9/16;margin:0 auto;background:#000;overflow:hidden}
+@supports not (height:100dvh){.sstage{height:100vh}}
+.sframe{position:absolute;inset:0}
+.sframe iframe{width:100%;height:100%;border:0}
+.sgrad{position:absolute;left:0;right:0;bottom:0;padding:48px 14px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.82));pointer-events:none}
+.sgrad h2{margin:0 64px 4px 0;font-size:.95rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sgrad p{margin:0 64px 8px 0;font-size:.8rem;color:#C9D4D3}
+.sgrad a{pointer-events:auto;color:var(--accent);font-size:.82rem;font-weight:600}
+#sclose{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:10px;background:rgba(0,0,0,.5)}
+.sbtns{position:absolute;right:8px;bottom:110px;display:flex;flex-direction:column;gap:10px}
+.sbtns .iconbtn{background:rgba(0,0,0,.5);border-color:rgba(255,255,255,.2)}
 </style>
 </head>
 <body>
@@ -104,6 +131,7 @@ main{max-width:880px;margin:0 auto;padding:14px 12px 64px}
   <button id="brandBtn" class="brand" type="button" aria-label="no-tube ana sayfa"><img src="icons/icon.svg" alt=""><span>no-tube</span></button>
   <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg><span class="lbl">Ara</span></button></div>
   <button id="cfg" class="iconbtn" type="button" aria-label="API anahtarı" title="API anahtarı"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12 21 2"/><path d="m16 7 3 3"/></svg></button>
+  <div class="tabs" role="tablist"><button id="tabHome" class="tab on" type="button" role="tab">Videolar</button><button id="tabShorts" class="tab" type="button" role="tab">Shorts</button></div>
 </header>
 <main id="res"><div class="msg">Yükleniyor…</div></main>
 
@@ -113,6 +141,18 @@ main{max-width:880px;margin:0 auto;padding:14px 12px 64px}
   <div class="pinfo"><h2 id="pt"></h2><p id="pc" class="ch"></p>
     <div class="actions"><button id="alt" type="button">Oynatıcıyı değiştir</button><a id="yt" class="btnlink" target="_blank" rel="noopener noreferrer">YouTube'da aç</a></div>
     <p id="ph"></p>
+  </div>
+</section>
+
+<section id="shorts" hidden>
+  <div class="sstage" id="sstage">
+    <div class="sframe"><iframe id="sfr" title="Shorts oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+    <button id="sclose" class="iconbtn" type="button" aria-label="Kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="sbtns">
+      <button id="sprev" class="iconbtn" type="button" aria-label="Önceki video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
+      <button id="snext" class="iconbtn" type="button" aria-label="Sonraki video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    </div>
+    <div class="sgrad"><h2 id="st"></h2><p id="sc"></p><a id="syt" target="_blank" rel="noopener noreferrer">YouTube'da aç</a></div>
   </div>
 </section>
 
@@ -235,6 +275,14 @@ const recCache = {
   set(feed, q){ try { localStorage.setItem(this.KEY, JSON.stringify({ at: Date.now(), feed: feed.slice(0, 30), q })); } catch(e){} },
   clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
 };
+// Shorts önbelleği: kısa video aramaları da kota yakar (100 birim), 20 dk saklanır
+const shortCache = {
+  KEY: 'notshorts_cache_v1',
+  TTL: 20 * 60 * 1000,
+  get(){ try { const c = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (c && Date.now() - c.at < this.TTL) return c; } catch(e){} return null; },
+  set(feed, q){ try { localStorage.setItem(this.KEY, JSON.stringify({ at: Date.now(), feed: feed.slice(0, 30), q })); } catch(e){} },
+  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
+};
 function saveWatch(v){
   if (!v || !v.id) return;
   const h = histStore.get();
@@ -262,11 +310,20 @@ $('ks').onclick = () => {
   const v = $('k').value.trim();
   if (!v) return;
   key = v; store.set(v); showSetup(false);
-  if (homeMode) showHome(); else if (query) search(query);
+  if (mode === 'shorts') showShorts(true);
+  else if (homeMode) showHome(); else if (query) search(query);
 };
 $('home').onclick = goHome;
 $('brandBtn').onclick = goHome;
-function goHome(){ homeMode = true; query = ''; next = ''; $('q').value = ''; showHome(); }
+let mode = 'home'; // 'home' | 'shorts'
+function setTab(m){
+  mode = m;
+  $('tabHome').classList.toggle('on', m === 'home');
+  $('tabShorts').classList.toggle('on', m === 'shorts');
+}
+$('tabHome').onclick = () => goHome();
+$('tabShorts').onclick = () => { closePlayer(); showShorts(); };
+function goHome(){ setTab('home'); homeMode = true; query = ''; next = ''; $('q').value = ''; showHome(); }
 
 const normSearch = it => ({ id: it.id.videoId, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
 const normPopular = it => ({ id: it.id, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
@@ -327,7 +384,7 @@ async function showHome(force){
     if (searches.length) {
       const ss = section('Son aramalar', searches.length + ' sorgu');
       const clrS = el('button', { className: 'link', type: 'button', textContent: 'Aramaları temizle' });
-      clrS.onclick = () => { searchStore.clear(); recCache.clear(); showHome(true); };
+      clrS.onclick = () => { searchStore.clear(); recCache.clear(); shortCache.clear(); showHome(true); };
       ss.append(clrS);
       root.append(ss);
       const chipsS = el('div', { className: 'chips' });
@@ -351,7 +408,7 @@ async function showHome(force){
     fs.append(yenile);
     if (hist.length) {
       const clrH = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
-      clrH.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
+      clrH.onclick = () => { histStore.clear(); recCache.clear(); shortCache.clear(); showHome(true); };
       fs.append(clrH);
     }
   }
@@ -457,8 +514,128 @@ function renderFeed(feedBox, videos, hist, prof, fromCache){
   });
 }
 
+// --- Shorts: dikey raf + dikey oynatıcı ---
+// Not: API'de resmi "shorts" filtresi yok; videoDuration=short (<4 dk) standart yaklaşımdır.
+let sque = [], sidx = 0;
+async function showShorts(force){
+  setTab('shorts');
+  homeMode = false;
+  const root = $('res');
+  const hist = histStore.get(), searches = searchStore.get();
+  const prof = buildProfile(hist, searches);
+  const topQ = (prof.queries[0] && prof.queries[0].q) || '';
+  const topChan = [...prof.chan.entries()].sort((a, b) => b[1].w - a[1].w)[0];
+  const cacheKey = 'sh:' + (topQ || '-') + '|' + (topChan ? topChan[0] : '-') + '#' + hist.length + 'v' + searches.length + 's';
+  root.replaceChildren();
+  const sh = section('Shorts', 'dikey + kısa videolar');
+  const rf = el('button', { className: 'link', type: 'button', textContent: 'Yenile' });
+  rf.onclick = () => { shortCache.clear(); showShorts(true); };
+  sh.append(rf);
+  root.append(sh);
+  const box = el('div', {});
+  root.append(box);
+  if (!key) {
+    box.append(el('div', { className: 'msg', textContent: 'Shorts için API anahtarını gir.' }));
+    const b = el('button', { className: 'more', type: 'button', textContent: 'Anahtarı gir' });
+    b.onclick = () => showSetup(true);
+    box.append(b);
+    return;
+  }
+  if (!force) {
+    const cached = shortCache.get();
+    if (cached && cached.q === cacheKey && cached.feed && cached.feed.length) { renderShorts(box, cached.feed); return; }
+  }
+  box.append(el('div', { className: 'msg', textContent: 'Shorts hazırlanıyor…' }));
+  skeletons(box, 4);
+  try {
+    const fetchShorts = async (params) => {
+      const u = new URL('https://www.googleapis.com/youtube/v3/search');
+      u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', videoDuration: 'short', maxResults: '12', key, ...params });
+      const r = await fetch(u);
+      const d = await r.json();
+      if (!r.ok) throw { resp: r, data: d };
+      return (d.items || []).map(normSearch).filter(v => v.id && v.thumb);
+    };
+    let items = [];
+    if (topQ) items.push(...await fetchShorts({ q: topQ }));
+    else if (!topChan) items.push(...await fetchShorts({ q: 'shorts', regionCode: 'TR', order: 'viewCount' }));
+    if (topChan) {
+      try { items.push(...await fetchShorts({ channelId: topChan[0], order: 'date' })); }
+      catch (e) { /* kanal shorts'u patlarsa sorun değil */ }
+    }
+    const seen = new Set(), feed = [];
+    items.forEach(v => { if (!seen.has(v.id)) { seen.add(v.id); feed.push(v); } });
+    shortCache.set(feed, cacheKey);
+    renderShorts(box, feed);
+  } catch (e) {
+    const r = e && e.resp, d = e && e.data;
+    const reason = (d && d.error && d.error.errors && d.error.errors[0] && d.error.errors[0].reason) || '';
+    if (reason === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
+    if (r && (r.status === 400 || r.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
+    box.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. İnternetini kontrol et.' }));
+  }
+}
+function renderShorts(box, feed){
+  box.replaceChildren();
+  if (!feed.length) { box.append(el('div', { className: 'msg', textContent: 'Shorts bulunamadı. Önce bir şeyler izle ya da ara.' })); return; }
+  const grid = el('div', { className: 'sgrid' });
+  feed.forEach((v, i) => {
+    const card = el('button', { className: 'scard', type: 'button' },
+      el('div', { className: 'sthumb' }, el('img', { src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' })),
+      el('div', { className: 'sinfo' }, el('h4', { textContent: v.title }), el('p', { textContent: v.channel })));
+    card.onclick = () => openShort(i, feed);
+    grid.append(card);
+  });
+  box.append(grid);
+}
+function renderShort(){
+  const v = sque[sidx];
+  if (!v) return;
+  const o = location.protocol.startsWith('http') ? '&origin=' + encodeURIComponent(location.origin) : '';
+  $('sfr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(v.id) + '?autoplay=1&playsinline=1&rel=0' + o;
+  $('st').textContent = v.title || '';
+  $('sc').textContent = v.channel || '';
+  $('syt').href = 'https://www.youtube.com/shorts/' + encodeURIComponent(v.id);
+}
+function openShort(i, feed){
+  sque = feed; sidx = i;
+  saveWatch(sque[sidx]);
+  renderShort();
+  $('shorts').hidden = false;
+  history.pushState({ s: 1 }, '');
+}
+function sStep(d){
+  if (!sque.length) return;
+  sidx = (sidx + d + sque.length) % sque.length;
+  saveWatch(sque[sidx]);
+  renderShort();
+}
+function closeShorts(){ $('sfr').src = 'about:blank'; $('shorts').hidden = true; }
+$('sclose').onclick = () => history.back();
+$('sprev').onclick = () => sStep(-1);
+$('snext').onclick = () => sStep(1);
+(() => {
+  let y0 = null;
+  const st = $('sstage');
+  st.addEventListener('touchstart', e => { y0 = e.changedTouches[0].clientY; }, { passive: true });
+  st.addEventListener('touchend', e => {
+    if (y0 == null) return;
+    const dy = e.changedTouches[0].clientY - y0;
+    y0 = null;
+    if (dy < -50) sStep(1);
+    else if (dy > 50) sStep(-1);
+  }, { passive: true });
+})();
+window.addEventListener('keydown', e => {
+  if ($('shorts').hidden) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); sStep(1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); sStep(-1); }
+  else if (e.key === 'Escape') history.back();
+});
+
 async function search(q, token){
   homeMode = false;
+  setTab('home');
   if (!key) { showSetup(true); return; }
   const u = new URL('https://www.googleapis.com/youtube/v3/search');
   u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
@@ -482,6 +659,7 @@ async function search(q, token){
 
 async function channelVideos(channelId, channelName){
   homeMode = false;
+  setTab('home');
   query = '';
   if (!key) { showSetup(true); return; }
   $('res').replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
@@ -547,7 +725,7 @@ function play(v){
 $('alt').onclick = () => { hostIdx = (hostIdx + 1) % hosts.length; load(); };
 function closePlayer(){ $('fr').src = 'about:blank'; $('player').hidden = true; }
 $('back').onclick = () => history.back();
-window.addEventListener('popstate', closePlayer);
+window.addEventListener('popstate', () => { if (!$('shorts').hidden) closeShorts(); else closePlayer(); });
 
 function doSearch(){
   query = $('q').value.trim();
