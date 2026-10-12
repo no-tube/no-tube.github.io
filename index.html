@@ -447,19 +447,6 @@ async function showHome(force){
   if (!hasSignal) {
     root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin ya da aramadın. Aşağıdaki trendlerden başla; izledikçe kanalların, aradıkça sorguların anasayfayı şekillendirecek.' }));
   } else {
-    const profSig = buildProfile(hist, searches);
-    // sık izlediğin kanallar: dokun o kanalın son videolarını getir
-    const topChans = [...profSig.chan.entries()].sort((a, b) => b[1].w - a[1].w).slice(0, 6);
-    if (topChans.length) {
-      root.append(el('div', { className: 'sec' }, el('h2', { textContent: 'Kanalların' })));
-      const chipsC = el('div', { className: 'chips' });
-      topChans.forEach(([id, c]) => {
-        const b = el('button', { className: 'chip', type: 'button', textContent: c.name || 'kanal' });
-        b.onclick = () => channelVideos(id, c.name);
-        chipsC.append(b);
-      });
-      root.append(chipsC);
-    }
     // son aramalar: ham sorguların, tek dokunuşla tekrar ara
     if (searches.length) {
       const ss = section('Son aramalar', searches.length + ' sorgu');
@@ -476,25 +463,6 @@ async function showHome(force){
       root.append(chipsS);
     }
     // izleme listesi gösterilmez — izlediklerin sessizce kanal skorunu besler
-  }
-
-  // Sessizdekiler: sinyal olmasa da gösterilsin ki geri alınabilsin
-  const mutes0 = muteStore.get();
-  const mCh = Object.entries(mutes0.channels), mW = mutes0.words;
-  if (mCh.length || mW.length) {
-    root.append(el('div', { className: 'sec' }, el('h2', { textContent: 'Sessizdekiler' }), el('span', { className: 'sub', textContent: 'dokun geri al' })));
-    const chipsM = el('div', { className: 'chips' });
-    mCh.forEach(([id, name]) => {
-      const c = el('button', { className: 'chip', type: 'button', textContent: '🔇 ' + name });
-      c.onclick = () => { muteStore.unmuteChannel(id); recCache.clear(); shortCache.clear(); showHome(true); };
-      chipsM.append(c);
-    });
-    mW.forEach(w => {
-      const c = el('button', { className: 'chip', type: 'button', textContent: '🔇 "' + w + '"' });
-      c.onclick = () => { muteStore.unmuteWord(w); recCache.clear(); shortCache.clear(); showHome(true); };
-      chipsM.append(c);
-    });
-    root.append(chipsM);
   }
 
   // 2) Öneriler / trendler
