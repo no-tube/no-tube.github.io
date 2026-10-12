@@ -1,5 +1,5 @@
 /* no-tube service worker — app-shell cache only, no YouTube/API caching */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const CACHE = `notube-${VERSION}`;
 const APP_SHELL = [
   './',

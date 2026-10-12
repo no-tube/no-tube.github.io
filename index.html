@@ -129,6 +129,21 @@ function scoreVideo(v, profile, watchedIds){
   if (watchedIds.has(v.id)) s -= 8; // izleneni öneride geri it, geçmişte zaten gösteriliyor
   return s;
 }
+// eşleşme nedenleri: rozette gösterilir ("lofi ilgin", "X kanalı")
+function reasonFor(v, profile, chanName){
+  const out = [];
+  if (v.channelId && profile.chan.get(v.channelId)) out.push((chanName || v.channel || 'kanal') + ' sık izlediğin');
+  const hits = tokens(v.title).filter(t => profile.kw.get(t)).sort((a, b) => (profile.kw.get(b) || 0) - (profile.kw.get(a) || 0)).slice(0, 2);
+  hits.forEach(t => out.push(t + ' ilgin'));
+  return out;
+}
+const recCache = {
+  KEY: 'notrec_cache_v1',
+  TTL: 20 * 60 * 1000, // 20 dk: kişisel aramalar kota yaktığı için her açılışta harcamayalım
+  get(){ try { const c = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (c && Date.now() - c.at < this.TTL) return c; } catch(e){} return null; },
+  set(feed, q){ try { localStorage.setItem(this.KEY, JSON.stringify({ at: Date.now(), feed: feed.slice(0, 30), q })); } catch(e){} },
+  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
+};
 function saveWatch(v){
   if (!v || !v.id) return;
   const h = histStore.get();
@@ -179,8 +194,8 @@ function section(title, sub){
   return h;
 }
 
-// Anasayfa: geçmiş + kişiselleştirilmiş popülerler (popüler = kota dostu, 1 birim)
-async function showHome(){
+// Anasayfa: geçmiş + kişisel adaylar + trendler (kişisel arama kota yakar, 20 dk önbellekli)
+async function showHome(force){
   homeMode = true;
   const root = $('res');
   const hist = histStore.get();
@@ -190,7 +205,7 @@ async function showHome(){
   const hs = section('Tekrar izle', hist.length ? hist.length + ' video' : '');
   if (hist.length) {
     const clr = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
-    clr.onclick = () => { histStore.clear(); showHome(); };
+    clr.onclick = () => { histStore.clear(); recCache.clear(); showHome(true); };
     hs.append(clr);
   }
   root.append(hs);
@@ -214,7 +229,14 @@ async function showHome(){
   }
 
   // 2) Öneriler / trendler
-  const fs = section(hist.length ? 'Senin için' : 'Trendler — Türkiye', hist.length ? 'izlediklerine göre sıralı' : '');
+  const prof0 = hist.length ? buildProfile(hist) : null;
+  const profSum = prof0 ? hist.length + ' video • ' + prof0.chan.size + ' kanal' : '';
+  const fs = section(hist.length ? 'Senin için' : 'Trendler — Türkiye', hist.length ? profSum + ' üzerinden' : '');
+  if (hist.length) {
+    const yenile = el('button', { className: 'link', type: 'button', textContent: 'Önerileri yenile' });
+    yenile.onclick = () => { recCache.clear(); showHome(true); };
+    fs.append(yenile);
+  }
   root.append(fs);
   const feedBox = el('div', {});
   root.append(feedBox);
@@ -226,34 +248,84 @@ async function showHome(){
     feedBox.append(b);
     return;
   }
-  feedBox.append(el('div', { className: 'msg', textContent: 'Öneriler hazırlanıyor…' }));
+  // önbellek: aynı ilgiyle 20 dk içinde tekrar kota harcama
+  const prof = prof0 || { chan: new Map(), kw: new Map() };
+  const topKw = [...prof.kw.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w]) => w);
+  const cacheKey = hist.length ? topKw.join('|') : 'trend';
+  if (!force) {
+    const cached = recCache.get();
+    if (cached && cached.q === cacheKey && cached.feed?.length) {
+      renderFeed(feedBox, cached.feed, hist, prof, true);
+      return;
+    }
+  }
+  feedBox.append(el('div', { className: 'msg', textContent: hist.length ? 'İlgilerine göre öneriler hazırlanıyor…' : 'Trendler yükleniyor…' }));
   try {
+    // A) trendler (1 kota) — her zaman taban
     const u = new URL('https://www.googleapis.com/youtube/v3/videos');
     u.search = new URLSearchParams({ part: 'snippet', chart: 'mostPopular', regionCode: 'TR', maxResults: '25', key });
     const r = await fetch(u);
     const d = await r.json();
-    if (!r.ok) {
-      const reason = d.error?.errors?.[0]?.reason || '';
-      if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Geçmişin aşağıda duruyor, yarın öneriler döner.' })); return; }
-      if (r.status === 400 || r.status === 403) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
-      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Öneriler alınamadı (' + r.status + ').' }));
-      return;
+    if (!r.ok) throw { resp: r, data: d };
+    const trends = (d.items || []).map(normPopular).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'trend' }));
+
+    // B) kişisel adaylar (100 kota/arama) — sadece geçmiş varsa, en fazla 2 arama
+    let personal = [];
+    if (hist.length && topKw.length) {
+      const queries = [topKw.slice(0, 2).join(' ')];
+      const topChan = [...prof.chan.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (topChan && topChan[1] >= 2) {
+        const chHist = hist.find(h => h.channelId === topChan[0]);
+        if (chHist) queries.push(chHist.channel);
+      }
+      for (const q of queries.slice(0, 2)) {
+        try {
+          const su = new URL('https://www.googleapis.com/youtube/v3/search');
+          su.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', q, key });
+          const sr = await fetch(su);
+          const sd = await sr.json();
+          if (sr.ok) personal.push(...(sd.items || []).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'sana özel arama: ' + q })));
+          else if (sd.error?.errors?.[0]?.reason === 'quotaExceeded') break;
+        } catch (e) { /* kişisel arama patlarsa trendlere düş */ }
+      }
     }
-    let videos = (d.items || []).map(normPopular).filter(v => v.id && v.thumb);
+
+    // birleştir + skorla + sırala
+    const seen = new Set(), merged = [];
+    [...personal, ...trends].forEach(v => { if (!seen.has(v.id)) { seen.add(v.id); merged.push(v); } });
     const watchedIds = new Set(hist.map(h => h.id));
-    if (hist.length) {
-      const prof = buildProfile(hist);
-      videos = videos.map(v => ({ v, s: scoreVideo(v, prof, watchedIds) })).sort((a, b) => b.s - a.s).map(({ v, s }) => ({ ...v, _s: s }));
-    }
-    feedBox.replaceChildren();
-    if (!videos.length) { feedBox.append(el('div', { className: 'msg', textContent: 'Şu an öneri yok.' })); return; }
-    videos.slice(0, 20).forEach((v, i) => {
-      const badge = hist.length ? (i < 3 && v._s > 0 ? 'sana özel' : (watchedIds.has(v.id) ? 'izlendi' : '')) : '';
-      feedBox.append(makeCard(v, badge ? { badge } : {}));
-    });
+    const chanName = {};
+    hist.forEach(h => { if (h.channelId && !chanName[h.channelId]) chanName[h.channelId] = h.channel; });
+    let videos = merged.map(v => ({ ...v, _s: hist.length ? scoreVideo(v, prof, watchedIds) : 0, _why: hist.length ? reasonFor(v, prof, chanName[v.channelId]) : [] }));
+    // kişisel adaylara küçük boost: sırf trendler ezmesin
+    videos.forEach(v => { if (v.src.startsWith('sana özel')) v._s += 1.5; });
+    videos.sort((a, b) => b._s - a._s);
+    recCache.set(videos, cacheKey);
+    renderFeed(feedBox, videos, hist, prof, false);
   } catch (e) {
+    const r = e?.resp, d = e?.data;
+    const reason = d?.error?.errors?.[0]?.reason || '';
+    if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Geçmişin yukarıda duruyor, yarın öneriler döner.' })); return; }
+    if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
     feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Geçmiş çevrimdışı kullanılabilir.' }));
   }
+}
+
+function renderFeed(feedBox, videos, hist, prof, fromCache){
+  feedBox.replaceChildren();
+  if (!videos.length) { feedBox.append(el('div', { className: 'msg', textContent: 'Şu an öneri yok.' })); return; }
+  const watchedIds = new Set(hist.map(h => h.id));
+  const nPersonal = videos.filter(v => v._s > 0).length;
+  if (hist.length) {
+    feedBox.append(el('div', { className: 'msg', textContent: nPersonal ? nPersonal + ' video ilgilerinle eşleşti' + (fromCache ? ' (önbellek)' : '') + '. Rozetler nedenini söyler.' : 'Trendler ilgilerinle eşleşmedi — 1-2 video daha izle ya da "Önerileri yenile"ye bas. Rozet çıkınca kişiselleşmiş demektir.' }));
+  }
+  videos.slice(0, 20).forEach(v => {
+    let badge = '';
+    if (watchedIds.has(v.id)) badge = 'izlendi';
+    else if (v._why?.length) badge = v._why.slice(0, 2).join(' • ');
+    else if (v.src?.startsWith('sana özel')) badge = 'sana özel arama';
+    feedBox.append(makeCard(v, badge ? { badge } : {}));
+  });
 }
 
 async function search(q, token){
