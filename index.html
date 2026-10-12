@@ -363,6 +363,7 @@ $('ks').onclick = () => {
 $('home').onclick = goHome;
 $('brandBtn').onclick = goHome;
 let mode = 'home'; // 'home' | 'shorts'
+let homeBusy = false, shortsBusy = false; // üst üste istek kilidi (429 hız sınırı koruması)
 function setTab(m){
   mode = m;
   $('tabHome').classList.toggle('on', m === 'home');
@@ -436,6 +437,7 @@ $('sheetBg').onclick = closeSheet;
 
 // Anasayfa: geçmiş + kişisel adaylar + trendler (kişisel arama kota yakar, 20 dk önbellekli)
 async function showHome(force){
+  if (homeBusy) return;
   homeMode = true;
   const root = $('res');
   const hist = histStore.get();
@@ -505,14 +507,16 @@ async function showHome(force){
   }
   feedBox.append(el('div', { className: 'msg', textContent: hasSignal ? 'İlgilerine göre öneriler hazırlanıyor…' : 'Trendler yükleniyor…' }));
   skeletons(feedBox, 3);
+  homeBusy = true;
   try {
     // A) trendler (1 kota) — her zaman taban
     const u = new URL('https://www.googleapis.com/youtube/v3/videos');
     u.search = new URLSearchParams({ part: 'snippet', chart: 'mostPopular', regionCode: 'TR', maxResults: '25', key });
     const r = await fetch(u);
-    const d = await r.json();
+    let d = {};
+    try { d = await r.json(); } catch (je) { d = {}; }
     if (!r.ok) throw { resp: r, data: d };
-    const trends = (d.items || []).map(normPopular).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'trend' }));
+    const trends = ((d && d.items) || []).map(normPopular).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'trend' }));
 
     // B) kişisel adaylar (100 kota/arama) — en fazla 2 arama:
     //   1) en güçlü ham sorgun (senin cümlen), 2) en çok izlediğin kanalın son videoları (channelId)
@@ -560,9 +564,16 @@ async function showHome(force){
     const r = e?.resp, d = e?.data;
     const reason = d?.error?.errors?.[0]?.reason || '';
     if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Kanalların ve aramaların kayıtlı, yarın öneriler döner.' })); return; }
+    if (r && r.status === 429) {
+      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. 1 dk bekle, sonra Tekrar dene.' }));
+      const rb = el('button', { className: 'more', type: 'button', textContent: 'Tekrar dene' });
+      rb.onclick = () => showHome(true);
+      feedBox.append(rb);
+      return;
+    }
     if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
     feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Son aramaların çevrimdışı kullanılabilir.' }));
-  }
+  } finally { homeBusy = false; }
 }
 
 function renderFeed(feedBox, videos, hist, prof, fromCache){
@@ -586,6 +597,7 @@ function renderFeed(feedBox, videos, hist, prof, fromCache){
 // Not: API'de resmi "shorts" filtresi yok; videoDuration=short (<4 dk) standart yaklaşımdır.
 let sque = [], sidx = 0;
 async function showShorts(force){
+  if (shortsBusy) return;
   setTab('shorts');
   homeMode = false;
   const root = $('res');
@@ -615,6 +627,7 @@ async function showShorts(force){
   }
   box.append(el('div', { className: 'msg', textContent: 'Shorts hazırlanıyor…' }));
   skeletons(box, 4);
+  shortsBusy = true;
   try {
     const fetchShorts = async (params) => {
       const u = new URL('https://www.googleapis.com/youtube/v3/search');
@@ -646,6 +659,13 @@ async function showShorts(force){
       const e0 = errs[0] || {}, r0 = e0.resp, d0 = e0.data || {};
       const reason0 = (d0.error && d0.error.errors && d0.error.errors[0] && d0.error.errors[0].reason) || (e0 instanceof TypeError ? 'ağ hatası' : '');
       if (reason0 === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
+      if (r0 && r0.status === 429) {
+        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. 1 dk bekle, sonra Tekrar dene.' }));
+        const rb = el('button', { className: 'more', type: 'button', textContent: 'Tekrar dene' });
+        rb.onclick = () => showShorts(true);
+        box.append(rb);
+        return;
+      }
       if (r0 && (r0.status === 400 || r0.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu (HTTP ' + r0.status + '). "Anahtar" düğmesinden kontrol et.' })); return; }
       const detail = (r0 ? 'HTTP ' + r0.status : 'ağ') + (reason0 ? ' • ' + reason0 : '');
       box.replaceChildren(el('div', { className: 'msg err', textContent: 'Shorts alınamadı (' + detail + '). İnternetini kontrol et, sürerse bu yazıyı söyle.' }));
@@ -655,7 +675,7 @@ async function showShorts(force){
     renderShorts(box, feed);
   } catch (e) {
     box.replaceChildren(el('div', { className: 'msg err', textContent: 'Beklenmedik hata: ' + ((e && e.message) || e) }));
-  }
+  } finally { shortsBusy = false; }
 }
 function renderShorts(box, feed){
   box.replaceChildren();
