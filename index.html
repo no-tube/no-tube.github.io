@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101C22">
-<title>Kendi video arayüzüm</title>
+<meta name="description" content="Gizlilik dostu, hafif YouTube arama ve oynatma arayüzü.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="no-tube">
+<title>no-tube — Kendi video arayüzüm</title>
 <style>
 :root{--bg:#101C22;--surface:#1A2B33;--line:#2A404A;--text:#E8F0EE;--muted:#8EA6AB;--accent:#F2C14E;
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -35,16 +44,26 @@ main{max-width:900px;margin:0 auto;padding:12px}
 #setup ol{padding-left:20px;color:var(--muted);font-size:.9rem}
 #setup li{margin-bottom:6px}
 #setup input{width:100%;margin:10px 0}
+.sec{display:flex;align-items:center;gap:10px;margin:18px 0 10px}
+.sec:first-child{margin-top:4px}
+.sec h2{margin:0;font-size:1rem}
+.sec .sub{font-size:.8rem;color:var(--muted)}
+.sec .sp{flex:1}
+.link{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 4px;font:inherit;font-size:.85rem}
+.badge{display:inline-block;font-size:.7rem;color:var(--accent);border:1px solid var(--line);border-radius:20px;padding:2px 8px;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:.82rem;color:var(--text);cursor:pointer}
 @media(min-width:700px){.card{grid-template-columns:280px 1fr}.card h3{font-size:1.05rem}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s}}
 </style>
 </head>
 <body>
 <header>
+  <button id="home" type="button" aria-label="Ana sayfa" title="Ana sayfa">Ev</button>
   <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" class="primary" type="button">Ara</button></div>
   <button id="cfg" type="button" aria-label="Ayarlar">Anahtar</button>
 </header>
-<main id="res"><div class="msg">Aramak istediğin şeyi yaz.</div></main>
+<main id="res"><div class="msg">Yükleniyor…</div></main>
 
 <section id="player" hidden>
   <div class="frame"><iframe id="fr" title="Video oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
@@ -78,11 +97,57 @@ const store = {
   get(){ try { return localStorage.getItem('ytkey') || ''; } catch(e){ return ''; } },
   set(v){ try { localStorage.setItem('ytkey', v); } catch(e){} }
 };
-let key = store.get(), query = '', next = '';
+const histStore = {
+  KEY: 'nothistory_v1',
+  MAX: 100,
+  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || '[]'); return Array.isArray(v) ? v : []; } catch(e){ return []; } },
+  set(v){ try { localStorage.setItem(this.KEY, JSON.stringify(v.slice(0, this.MAX))); } catch(e){} },
+  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
+};
+let key = store.get(), query = '', next = '', homeMode = true;
+
+// --- Öneri algoritması: tamamı cihazda, sunucu yok, geçmiş dışarı gitmez ---
+const STOP = new Set(('ve veya bir bu şu o ne ile için gibi çok daha en mi mı mu mü de da ki ise ama fakat çünkü eğer kadar göre hem the and for with from that this are was were has have not you your ile ilgili olarak nasıl neden niye').split(' '));
+const tokens = t => (t || '').toLocaleLowerCase('tr-TR').split(/[^a-zçğıöşüâîû0-9]+/i).filter(w => w.length >= 3 && !STOP.has(w)).slice(0, 24);
+
+function buildProfile(hist){
+  const chan = new Map(), kw = new Map();
+  const now = Date.now();
+  hist.forEach(h => {
+    const ageDays = Math.max(0, (now - (h.at || now)) / 864e5);
+    const decay = Math.pow(0.93, ageDays); // eski izlemeler yavaşça unutulur
+    const w = decay * (1 + Math.min(h.count || 1, 5) * 0.3);
+    if (h.channelId) chan.set(h.channelId, (chan.get(h.channelId) || 0) + w * 3);
+    tokens(h.title).forEach(t => kw.set(t, (kw.get(t) || 0) + w));
+  });
+  return { chan, kw };
+}
+function scoreVideo(v, profile, watchedIds){
+  let s = 0;
+  if (profile.chan.get(v.channelId)) s += profile.chan.get(v.channelId) * 2;
+  tokens(v.title).forEach(t => { if (profile.kw.get(t)) s += profile.kw.get(t); });
+  if (watchedIds.has(v.id)) s -= 8; // izleneni öneride geri it, geçmişte zaten gösteriliyor
+  return s;
+}
+function saveWatch(v){
+  if (!v || !v.id) return;
+  const h = histStore.get();
+  const i = h.findIndex(x => x.id === v.id);
+  if (i >= 0) {
+    h[i].count = (h[i].count || 1) + 1;
+    h[i].at = Date.now();
+    h[i].title = v.title; h[i].thumb = v.thumb;
+    const [it] = h.splice(i, 1); h.unshift(it);
+  } else {
+    h.unshift({ id: v.id, title: v.title, channel: v.channel, channelId: v.channelId, thumb: v.thumb, at: Date.now(), count: 1 });
+  }
+  histStore.set(h);
+}
 
 const dec = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); kids.forEach(k => n.append(k)); return n; };
 const msg = (t, err) => $('res').replaceChildren(el('div', { className: 'msg' + (err ? ' err' : ''), textContent: t }));
+const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' }); } catch(e){ return ''; } };
 
 function showSetup(open){ $('setup').hidden = !open; if (open) { $('k').value = ''; $('k').focus(); } }
 $('cfg').onclick = () => showSetup(true);
@@ -91,10 +156,108 @@ $('ks').onclick = () => {
   const v = $('k').value.trim();
   if (!v) return;
   key = v; store.set(v); showSetup(false);
-  if (query) search(query);
+  if (homeMode) showHome(); else if (query) search(query);
 };
+$('home').onclick = goHome;
+function goHome(){ homeMode = true; query = ''; next = ''; $('q').value = ''; showHome(); }
+
+const normSearch = it => ({ id: it.id.videoId, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
+const normPopular = it => ({ id: it.id, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
+
+function makeCard(v, opts = {}){
+  const img = el('img', { src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
+  const info = el('div', {}, el('h3', { textContent: v.title }), el('p', { textContent: v.channel + (v.publishedAt ? ' • ' + fmtDate(v.publishedAt) : '') }));
+  if (opts.badge) info.append(el('span', { className: 'badge', textContent: opts.badge }));
+  const card = el('button', { className: 'card', type: 'button' }, img, info);
+  card.onclick = () => play(v);
+  return card;
+}
+function section(title, sub){
+  const h = el('div', { className: 'sec' }, el('h2', { textContent: title }));
+  if (sub) h.append(el('span', { className: 'sub', textContent: sub }));
+  h.append(el('span', { className: 'sp' }));
+  return h;
+}
+
+// Anasayfa: geçmiş + kişiselleştirilmiş popülerler (popüler = kota dostu, 1 birim)
+async function showHome(){
+  homeMode = true;
+  const root = $('res');
+  const hist = histStore.get();
+  root.replaceChildren();
+
+  // 1) Geçmiş bölümü (çevrimdışı da çalışır)
+  const hs = section('Tekrar izle', hist.length ? hist.length + ' video' : '');
+  if (hist.length) {
+    const clr = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
+    clr.onclick = () => { histStore.clear(); showHome(); };
+    hs.append(clr);
+  }
+  root.append(hs);
+  if (!hist.length) {
+    root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin. Aşağıdaki trendlerden başla, anasayfa zamanla sana göre şekillenecek.' }));
+  } else {
+    hist.slice(0, 8).forEach(h => root.append(makeCard({ id: h.id, title: h.title, channel: h.channel, channelId: h.channelId, thumb: h.thumb }, { badge: (h.count > 1 ? h.count + ' kez izlendi' : 'izlendi') })));
+    // ilgi etiketleri: en sık kelimeler, tek dokunuşla arama
+    const prof = buildProfile(hist);
+    const topKw = [...prof.kw.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w]) => w);
+    if (topKw.length) {
+      const chips = el('div', { className: 'chips' });
+      topKw.forEach(w => {
+        const c = el('button', { className: 'chip', type: 'button', textContent: w });
+        c.onclick = () => { $('q').value = w; doSearch(); };
+        chips.append(c);
+      });
+      root.append(el('div', { className: 'sec' }, el('h2', { textContent: 'İlgilerin' })));
+      root.append(chips);
+    }
+  }
+
+  // 2) Öneriler / trendler
+  const fs = section(hist.length ? 'Senin için' : 'Trendler — Türkiye', hist.length ? 'izlediklerine göre sıralı' : '');
+  root.append(fs);
+  const feedBox = el('div', {});
+  root.append(feedBox);
+
+  if (!key) {
+    feedBox.append(el('div', { className: 'msg', textContent: 'Trendleri görmek için API anahtarını gir.' }));
+    const b = el('button', { className: 'more', type: 'button', textContent: 'Anahtarı gir' });
+    b.onclick = () => showSetup(true);
+    feedBox.append(b);
+    return;
+  }
+  feedBox.append(el('div', { className: 'msg', textContent: 'Öneriler hazırlanıyor…' }));
+  try {
+    const u = new URL('https://www.googleapis.com/youtube/v3/videos');
+    u.search = new URLSearchParams({ part: 'snippet', chart: 'mostPopular', regionCode: 'TR', maxResults: '25', key });
+    const r = await fetch(u);
+    const d = await r.json();
+    if (!r.ok) {
+      const reason = d.error?.errors?.[0]?.reason || '';
+      if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Geçmişin aşağıda duruyor, yarın öneriler döner.' })); return; }
+      if (r.status === 400 || r.status === 403) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
+      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Öneriler alınamadı (' + r.status + ').' }));
+      return;
+    }
+    let videos = (d.items || []).map(normPopular).filter(v => v.id && v.thumb);
+    const watchedIds = new Set(hist.map(h => h.id));
+    if (hist.length) {
+      const prof = buildProfile(hist);
+      videos = videos.map(v => ({ v, s: scoreVideo(v, prof, watchedIds) })).sort((a, b) => b.s - a.s).map(({ v, s }) => ({ ...v, _s: s }));
+    }
+    feedBox.replaceChildren();
+    if (!videos.length) { feedBox.append(el('div', { className: 'msg', textContent: 'Şu an öneri yok.' })); return; }
+    videos.slice(0, 20).forEach((v, i) => {
+      const badge = hist.length ? (i < 3 && v._s > 0 ? 'sana özel' : (watchedIds.has(v.id) ? 'izlendi' : '')) : '';
+      feedBox.append(makeCard(v, badge ? { badge } : {}));
+    });
+  } catch (e) {
+    feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Geçmiş çevrimdışı kullanılabilir.' }));
+  }
+}
 
 async function search(q, token){
+  homeMode = false;
   if (!key) { showSetup(true); return; }
   const u = new URL('https://www.googleapis.com/youtube/v3/search');
   u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
@@ -110,25 +273,20 @@ async function search(q, token){
       return msg('Arama başarısız oldu (' + r.status + ').', true);
     }
     next = d.nextPageToken || '';
-    render(d.items || [], !!token);
+    renderSearch((d.items || []).map(normSearch), !!token);
   } catch (e) {
     msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
   }
 }
 
-function render(items, append){
+function renderSearch(items, append){
   const root = $('res');
   if (!append) root.replaceChildren();
   root.querySelector('.more')?.remove();
   if (!items.length && !append) return msg('Sonuç bulunamadı. Başka bir arama dene.');
-  items.forEach(it => {
-    const s = it.snippet, id = it.id.videoId;
-    const img = el('img', { src: s.thumbnails.medium.url, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
-    const when = new Date(s.publishedAt).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' });
-    const info = el('div', {}, el('h3', { textContent: dec(s.title) }), el('p', { textContent: dec(s.channelTitle) + ' • ' + when }));
-    const card = el('button', { className: 'card', type: 'button' }, img, info);
-    card.onclick = () => play(id, dec(s.title), dec(s.channelTitle));
-    root.append(card);
+  const watchedIds = new Set(histStore.get().map(h => h.id));
+  items.forEach(v => {
+    root.append(makeCard(v, watchedIds.has(v.id) ? { badge: 'izlendi' } : {}));
   });
   if (next) {
     const b = el('button', { className: 'more', type: 'button', textContent: 'Daha fazla göster' });
@@ -138,20 +296,21 @@ function render(items, append){
 }
 
 const hosts = ['www.youtube-nocookie.com', 'www.youtube.com'];
-let hostIdx = 0, cur = '';
+let hostIdx = 0, cur = null;
 function load(){
   const o = location.protocol.startsWith('http') ? '&origin=' + encodeURIComponent(location.origin) : '';
-  $('fr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(cur) + '?autoplay=1&playsinline=1&rel=0' + o;
+  $('fr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(cur.id) + '?autoplay=1&playsinline=1&rel=0' + o;
   $('ph').textContent = location.protocol.startsWith('http')
     ? 'Oynatıcı: ' + hosts[hostIdx] + ' (hata verirse "Oynatıcıyı değiştir"e bas)'
     : 'Bu sayfa dosya olarak açılmış (' + location.protocol + '). YouTube bu durumda Hata 153 verir. Sayfayı bir https adresinden aç ya da aşağıdaki bağlantıyı kullan.';
   $('ph').textContent += ' | Sayfa adresi: ' + location.origin;
 }
-function play(id, title, channel){
-  cur = id;
-  $('pt').textContent = title;
-  $('pc').textContent = channel;
-  $('yt').href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(id);
+function play(v){
+  cur = typeof v === 'string' ? { id: v, title: '', channel: '' } : v;
+  saveWatch(cur);
+  $('pt').textContent = cur.title || '';
+  $('pc').textContent = cur.channel || '';
+  $('yt').href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(cur.id);
   load();
   $('player').hidden = false;
   history.pushState({ p: 1 }, '');
@@ -172,7 +331,16 @@ $('go').addEventListener('click', doSearch);
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
 window.addEventListener('error', e => msg('Hata: ' + e.message, true));
 window.addEventListener('unhandledrejection', e => msg('Hata: ' + (e.reason && e.reason.message || e.reason), true));
+
+// PWA: service worker kaydı (sadece https / localhost'ta çalışır)
+if ('serviceWorker' in navigator && (location.protocol.startsWith('http') || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+// açılış: anahtar yoksa kurulum, varsa kişiselleşmiş anasayfa
 if (!key) showSetup(true);
+showHome();
 </script>
 </body>
 </html>
