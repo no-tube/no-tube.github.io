@@ -620,28 +620,41 @@ async function showShorts(force){
       const u = new URL('https://www.googleapis.com/youtube/v3/search');
       u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', videoDuration: 'short', maxResults: '12', key, ...params });
       const r = await fetch(u);
-      const d = await r.json();
+      let d = {};
+      try { d = await r.json(); } catch (je) { d = {}; }
       if (!r.ok) throw { resp: r, data: d };
-      return (d.items || []).map(normSearch).filter(v => v.id && v.thumb);
+      return ((d && d.items) || []).map(normSearch).filter(v => v.id && v.thumb);
     };
+    // her aday bağımsız denenir: biri patlasa diğeri yine listeyi doldurur
+    const errs = [];
     let items = [];
-    if (topQ) items.push(...await fetchShorts({ q: topQ }));
-    else if (!topChan) items.push(...await fetchShorts({ q: 'shorts', regionCode: 'TR', order: 'viewCount' }));
+    if (topQ) {
+      try { items.push(...await fetchShorts({ q: topQ })); }
+      catch (e) { errs.push(e); }
+    } else if (!topChan) {
+      try { items.push(...await fetchShorts({ q: 'shorts', regionCode: 'TR', order: 'viewCount' })); }
+      catch (e) { errs.push(e); }
+    }
     if (topChan) {
       try { items.push(...await fetchShorts({ channelId: topChan[0], order: 'date' })); }
-      catch (e) { /* kanal shorts'u patlarsa sorun değil */ }
+      catch (e) { errs.push(e); }
     }
     const seen = new Set(), feed = [];
     const sm = muteStore.get();
     items.forEach(v => { if (!seen.has(v.id) && !isMuted(v, sm)) { seen.add(v.id); feed.push(v); } });
+    if (!feed.length && errs.length) {
+      const e0 = errs[0] || {}, r0 = e0.resp, d0 = e0.data || {};
+      const reason0 = (d0.error && d0.error.errors && d0.error.errors[0] && d0.error.errors[0].reason) || (e0 instanceof TypeError ? 'ağ hatası' : '');
+      if (reason0 === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
+      if (r0 && (r0.status === 400 || r0.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu (HTTP ' + r0.status + '). "Anahtar" düğmesinden kontrol et.' })); return; }
+      const detail = (r0 ? 'HTTP ' + r0.status : 'ağ') + (reason0 ? ' • ' + reason0 : '');
+      box.replaceChildren(el('div', { className: 'msg err', textContent: 'Shorts alınamadı (' + detail + '). İnternetini kontrol et, sürerse bu yazıyı söyle.' }));
+      return;
+    }
     shortCache.set(feed, cacheKey);
     renderShorts(box, feed);
   } catch (e) {
-    const r = e && e.resp, d = e && e.data;
-    const reason = (d && d.error && d.error.errors && d.error.errors[0] && d.error.errors[0].reason) || '';
-    if (reason === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
-    if (r && (r.status === 400 || r.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
-    box.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. İnternetini kontrol et.' }));
+    box.replaceChildren(el('div', { className: 'msg err', textContent: 'Beklenmedik hata: ' + ((e && e.message) || e) }));
   }
 }
 function renderShorts(box, feed){
