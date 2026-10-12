@@ -365,18 +365,37 @@ $('brandBtn').onclick = goHome;
 let mode = 'home'; // 'home' | 'shorts'
 let homeBusy = false, shortsBusy = false; // üst üste istek kilidi (429 hız sınırı koruması)
 const cds = { home: 0, shorts: 0 };
-// 429 sayacı: buton 60 sn kilitli kalır, çünkü beklerken basılan her istek ceza süresini uzatır
-function cooldownBtn(box, slot, label, fn){
-  const rb = el('button', { className: 'more', type: 'button', textContent: label + ' (60)', disabled: true });
+// 429 sayacı: buton süre bitene kadar kilitli kalır, çünkü beklerken basılan her istek ceza süresini uzatır
+function cooldownBtn(box, slot, label, fn, secs){
+  secs = Math.max(5, Math.ceil(secs || 60));
+  const rb = el('button', { className: 'more', type: 'button', textContent: label + ' (' + secs + ')', disabled: true });
   box.append(rb);
   clearInterval(cds[slot]);
-  let s = 60;
+  let s = secs;
   cds[slot] = setInterval(() => {
     s--;
     if (!document.body.contains(rb)) { clearInterval(cds[slot]); cds[slot] = 0; return; }
     if (s <= 0) { clearInterval(cds[slot]); cds[slot] = 0; rb.disabled = false; rb.textContent = label; rb.onclick = fn; }
     else rb.textContent = label + ' (' + s + ')';
   }, 1000);
+}
+// Devre kesici: 429 cezası sürerken HİÇ istek atılmaz (sayfa açılışı dahil).
+// localStorage'da durur, sekme kapatılıp açılsa da korunur. Başarılı istekte sıfırlanır.
+const rlStore = {
+  KEY: 'notrl_v1',
+  STEPS: [90, 300, 900], // sn: üst üste 429'da mola büyür (1.5dk → 5dk → 15dk)
+  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (v && typeof v.until === 'number') return v; } catch(e){} return { until: 0, fails: 0 }; },
+  set(v){ try { localStorage.setItem(this.KEY, JSON.stringify(v)); } catch(e){} },
+  hit(){ const s = this.get(); const fails = (s.fails || 0) + 1; const wait = this.STEPS[Math.min(fails - 1, this.STEPS.length - 1)]; this.set({ until: Date.now() + wait * 1000, fails }); return wait; },
+  reset(){ this.set({ until: 0, fails: 0 }); },
+  remaining(){ return Math.max(0, Math.ceil((this.get().until - Date.now()) / 1000)); }
+};
+function rlBlock(box, slot, retryFn){
+  const left = rlStore.remaining();
+  if (left <= 0) return false;
+  box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırı molası sürüyor (' + left + ' sn kaldı). Bu sürede istek atılmıyor — atılırsa ceza uzar.' }));
+  cooldownBtn(box, slot, 'Tekrar dene', () => retryFn(true), left);
+  return true;
 }
 function setTab(m){
   mode = m;
@@ -520,6 +539,7 @@ async function showHome(force){
       return;
     }
   }
+  if (rlBlock(feedBox, 'home', (f) => showHome(f))) return;
   feedBox.append(el('div', { className: 'msg', textContent: hasSignal ? 'İlgilerine göre öneriler hazırlanıyor…' : 'Trendler yükleniyor…' }));
   skeletons(feedBox, 3);
   homeBusy = true;
@@ -543,9 +563,11 @@ async function showHome(force){
           const su = new URL('https://www.googleapis.com/youtube/v3/search');
           su.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', q, key });
           const sr = await fetch(su);
-          const sd = await sr.json();
-          if (sr.ok) personal.push(...(sd.items || []).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'sana özel arama: ' + q })));
+          let sd = {};
+          try { sd = await sr.json(); } catch (je) { sd = {}; }
+          if (sr.ok) personal.push(...((sd.items || [])).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'sana özel arama: ' + q })));
           else if (sd.error?.errors?.[0]?.reason === 'quotaExceeded') throw { resp: sr, data: sd };
+          else if (sr.status === 429) rlStore.hit();
         } catch (e) { if (e?.resp) throw e; /* ağ patlarsa trendlere düş */ }
       }
       if (topChanIds.length) {
@@ -554,11 +576,12 @@ async function showHome(force){
           const cu = new URL('https://www.googleapis.com/youtube/v3/search');
           cu.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', order: 'date', channelId: cid, key });
           const cr = await fetch(cu);
-          const cd = await cr.json();
+          let cd = {};
+          try { cd = await cr.json(); } catch (je) { cd = {}; }
           if (cr.ok) {
             const cname = prof.chan.get(cid)?.name || 'kanalın';
-            personal.push(...(cd.items || []).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: cname + ' kanalından yeni' })));
-          }
+            personal.push(...((cd.items || [])).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: cname + ' kanalından yeni' })));
+          } else if (cr.status === 429) rlStore.hit();
         } catch (e) { /* kanal araması patlarsa sorun değil */ }
       }
     }
@@ -574,14 +597,17 @@ async function showHome(force){
     videos.forEach(v => { if (v.src !== 'trend') v._s += 1.5; });
     videos = blendFeed(videos); // skor sırası değil, kaynaklar arası harman
     recCache.set(videos, cacheKey);
+    rlStore.reset();
     renderFeed(feedBox, videos, hist, prof, false);
   } catch (e) {
     const r = e?.resp, d = e?.data;
     const reason = d?.error?.errors?.[0]?.reason || '';
     if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Kanalların ve aramaların kayıtlı, yarın öneriler döner.' })); return; }
     if (r && r.status === 429) {
-      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. Sayaç bitene kadar hiçbir şeye basma, her istek süreyi uzatır.' }));
-      cooldownBtn(feedBox, 'home', 'Tekrar dene', () => showHome(true));
+      const wait = rlStore.hit();
+      try { console.warn('[no-tube] 429', d && d.error); } catch (ce) {}
+      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429). ' + wait + ' sn mola başladı — süre bitmeden istek atılmıyor.' }));
+      cooldownBtn(feedBox, 'home', 'Tekrar dene', () => showHome(true), wait);
       return;
     }
     if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
@@ -639,6 +665,7 @@ async function showShorts(force){
     const cached = shortCache.get();
     if (cached && cached.q === cacheKey && cached.feed && cached.feed.length) { renderShorts(box, cached.feed); return; }
   }
+  if (rlBlock(box, 'shorts', (f) => showShorts(f))) return;
   box.append(el('div', { className: 'msg', textContent: 'Shorts hazırlanıyor…' }));
   skeletons(box, 4);
   shortsBusy = true;
@@ -669,13 +696,16 @@ async function showShorts(force){
     const seen = new Set(), feed = [];
     const sm = muteStore.get();
     items.forEach(v => { if (!seen.has(v.id) && !isMuted(v, sm)) { seen.add(v.id); feed.push(v); } });
+    if (errs.some(e => e && e.resp && e.resp.status === 429)) rlStore.hit();
     if (!feed.length && errs.length) {
       const e0 = errs[0] || {}, r0 = e0.resp, d0 = e0.data || {};
       const reason0 = (d0.error && d0.error.errors && d0.error.errors[0] && d0.error.errors[0].reason) || (e0 instanceof TypeError ? 'ağ hatası' : '');
       if (reason0 === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
       if (r0 && r0.status === 429) {
-        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429) — üst üste çok istek atıldı. Sayaç bitene kadar hiçbir şeye basma, her istek süreyi uzatır.' }));
-        cooldownBtn(box, 'shorts', 'Tekrar dene', () => showShorts(true));
+        const wait = rlStore.hit();
+        try { console.warn('[no-tube] shorts 429', d0 && d0.error); } catch (ce) {}
+        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429). ' + wait + ' sn mola başladı — süre bitmeden istek atılmıyor.' }));
+        cooldownBtn(box, 'shorts', 'Tekrar dene', () => showShorts(true), wait);
         return;
       }
       if (r0 && (r0.status === 400 || r0.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu (HTTP ' + r0.status + '). "Anahtar" düğmesinden kontrol et.' })); return; }
@@ -684,6 +714,7 @@ async function showShorts(force){
       return;
     }
     shortCache.set(feed, cacheKey);
+    rlStore.reset();
     renderShorts(box, feed);
   } catch (e) {
     box.replaceChildren(el('div', { className: 'msg err', textContent: 'Beklenmedik hata: ' + ((e && e.message) || e) }));
@@ -754,21 +785,26 @@ async function search(q, token){
   homeMode = false;
   setTab('home');
   if (!key) { showSetup(true); return; }
+  const rlLeft = rlStore.remaining();
+  if (rlLeft > 0 && !token) { msg('Hız sınırı molası (' + rlLeft + ' sn kaldı). Süre bitmeden arama yapılmıyor.'); return; }
   const u = new URL('https://www.googleapis.com/youtube/v3/search');
   u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
   if (!token) { $('res').replaceChildren(); skeletons($('res'), 4); }
   try {
     const r = await fetch(u);
-    const d = await r.json();
+    let d = {};
+    try { d = await r.json(); } catch (je) { d = {}; }
     if (!r.ok) {
       const reason = d.error?.errors?.[0]?.reason || '';
       if (reason === 'quotaExceeded') return msg('Günlük arama kotan doldu. Yarın tekrar dene.', true);
+      if (r.status === 429) { const wait = rlStore.hit(); return msg('Hız sınırı (429). ' + wait + ' sn mola — süre bitmeden arama yapılmıyor.', true); }
       if (/keyInvalid|badRequest/.test(reason) || r.status === 400) return msg('API anahtarı geçersiz. "Anahtar" düğmesinden yenisini gir.', true);
       if (r.status === 403) return msg('Erişim reddedildi. Anahtarın bu adresten kullanılmasına izin verilmiş mi kontrol et.', true);
       return msg('Arama başarısız oldu (' + r.status + ').', true);
     }
+    rlStore.reset();
     next = d.nextPageToken || '';
-    renderSearch((d.items || []).map(normSearch), !!token);
+    renderSearch(((d && d.items) || []).map(normSearch), !!token);
   } catch (e) {
     msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
   }
@@ -779,20 +815,25 @@ async function channelVideos(channelId, channelName){
   setTab('home');
   query = '';
   if (!key) { showSetup(true); return; }
+  const rlLeftC = rlStore.remaining();
+  if (rlLeftC > 0) { msg('Hız sınırı molası (' + rlLeftC + ' sn kaldı). Süre bitmeden istek yapılmıyor.'); return; }
   $('res').replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
   skeletons($('res'), 4);
   try {
     const u = new URL('https://www.googleapis.com/youtube/v3/search');
     u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', order: 'date', channelId, key });
     const r = await fetch(u);
-    const d = await r.json();
+    let d = {};
+    try { d = await r.json(); } catch (je) { d = {}; }
     if (!r.ok) {
       const reason = d.error?.errors?.[0]?.reason || '';
       if (reason === 'quotaExceeded') return msg('Günlük kotan doldu. Yarın tekrar dene.', true);
+      if (r.status === 429) { const wait = rlStore.hit(); return msg('Hız sınırı (429). ' + wait + ' sn mola — süre bitmeden istek yapılmıyor.', true); }
       return msg('Kanal videoları alınamadı (' + r.status + ').', true);
     }
+    rlStore.reset();
     next = '';
-    const items = (d.items || []).map(normSearch);
+    const items = ((d && d.items) || []).map(normSearch);
     const root = $('res');
     root.replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
     const watchedIds = new Set(histStore.get().map(h => h.id));
