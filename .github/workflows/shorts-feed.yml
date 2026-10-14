@@ -1,0 +1,23 @@
+name: shorts-feed
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install yt-dlp
+      - run: python tools/build-shorts.py
+      - run: |
+          git config user.name no-tube
+          git config user.email no-tube@users.noreply.github.com
+          git add shorts.json
+          git diff --cached --quiet || { git commit -m "shorts akışı güncellendi" && git push; }
