@@ -1,914 +1,100 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101C22">
-<meta name="description" content="Gizlilik dostu, hafif YouTube arama ve oynatma arayüzü.">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
-<link rel="icon" type="image/png" sizes="300x300" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="no-tube">
-<title>no-tube — Kendi video arayüzüm</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>no-tube</title>
+<meta name="description" content="no-tube — API'siz alternatif YouTube" />
+<meta name="theme-color" content="#0f0f0f" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-:root{--bg:#101C22;--surface:#182933;--surface2:#22363F;--line:#2A404A;--text:#E8F0EE;--muted:#93A9AE;--accent:#F2C14E;--accent-ink:#1B1500;--danger:#FF9D8A;--radius:14px;
-  color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-*,*::before,*::after{box-sizing:inherit}
-html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;display:flex;align-items:center;gap:4px;padding:8px 10px;background:rgba(16,28,34,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:8px;background:none;border:0;color:var(--text);font-weight:800;font-size:1.05rem;letter-spacing:.01em;cursor:pointer;padding:7px 9px;border-radius:10px;white-space:nowrap}
-.brand img{width:28px;height:28px;display:block}
-.brand:hover{background:var(--surface)}
-#f{display:flex;flex:1;gap:0;min-width:0;max-width:560px;margin:0 auto}
-#f input{flex:1;min-width:0;background:var(--surface);color:var(--text);border:1px solid var(--line);border-right:0;border-radius:12px 0 0 12px;padding:10px 14px;font:inherit}
-#f input::placeholder{color:var(--muted)}
-#f input:focus{outline:none;border-color:var(--accent)}
-#go{display:flex;align-items:center;gap:6px;background:var(--surface2);color:var(--text);border:1px solid var(--line);border-radius:0 12px 12px 0;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer;flex:none}
-#go:hover{border-color:var(--accent);color:var(--accent)}
-#go svg{width:18px;height:18px}
-.iconbtn{display:flex;align-items:center;justify-content:center;width:42px;height:42px;flex:none;background:transparent;border:1px solid transparent;border-radius:50%;color:var(--text);cursor:pointer}
-.iconbtn:hover{background:var(--surface);border-color:var(--line)}
-.iconbtn svg{width:22px;height:22px}
-button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px;cursor:pointer}
-button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:700}
-button.primary:hover{filter:brightness(1.07)}
-button:focus-visible,#go:focus-visible,.brand:focus-visible,.chip:focus-visible,.card:focus-visible,.scard:focus-visible,.iconbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-@media(max-width:520px){.brand span{display:none}#go span.lbl{display:none}#go{padding:10px 13px}}
-main{max-width:880px;margin:0 auto;padding:14px 12px 64px}
-.card{display:grid;grid-template-columns:1fr;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:var(--radius);padding:8px;margin:0 0 10px;color:inherit;cursor:pointer}
-.card:hover{background:var(--surface);border-color:var(--line)}
-.card{position:relative}
-.mute{position:absolute;top:14px;right:14px;width:34px;height:34px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(5,10,13,.65);border:1px solid rgba(255,255,255,.18);color:var(--text);font-size:1rem;line-height:1;cursor:pointer}
-.mute:hover{border-color:var(--accent);color:var(--accent)}
-#sheet{position:fixed;inset:0;z-index:50}
-#sheet[hidden]{display:none}
-.sheetbg{position:absolute;inset:0;background:rgba(0,0,0,.6)}
-.sheetbox{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:18px 18px 0 0;padding:14px 14px calc(16px + env(safe-area-inset-bottom,0px))}
-.sheetbox .stitle{margin:2px 4px 10px;font-size:.85rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sheetbtn{display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px 14px;border-radius:12px}
-.sheetbtn:hover{border-color:var(--accent)}
-.sheetbtn small{display:block;color:var(--muted);font-size:.78rem;margin-top:2px}
-.thumb{position:relative;overflow:hidden;border-radius:12px;background:var(--surface2);aspect-ratio:16/9}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s ease}
-.card:hover .thumb img{transform:scale(1.03)}
-.vinfo{padding:10px 6px 6px;min-width:0}
-.vinfo h3{margin:0 0 4px;font-size:1rem;font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.vinfo .meta{margin:2px 0 0;font-size:.83rem;color:var(--muted)}
-.msg{padding:26px 12px;color:var(--muted);text-align:center}
-.msg.err{color:var(--danger)}
-.more{display:flex;align-items:center;justify-content:center;margin:12px auto 30px;padding:11px 30px;border-radius:999px}
-.more:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
-.more:disabled{opacity:.55;cursor:default}
-#player{position:fixed;inset:0;z-index:30;background:var(--bg);overflow:auto;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-#setup{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(5,10,13,.72)}
-#player[hidden],#setup[hidden]{display:none}
-.pbar{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(16,28,34,.94);border-bottom:1px solid var(--line)}
-.pbar .ptitle{font-weight:700}
-.frame{width:100%;aspect-ratio:16/9;background:#000}
-.frame iframe{width:100%;height:100%;border:0}
-@media(min-width:1100px){.frame{max-width:1100px;margin:14px auto 0;border-radius:12px;overflow:hidden}}
-.pinfo{padding:14px 12px;max-width:880px;margin:0 auto}
-.pinfo h2{font-size:1.15rem;margin:0 0 4px;line-height:1.35}
-.pinfo .ch{margin:0;color:var(--muted);font-size:.9rem}
-.pinfo .actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0 4px}
-.btnlink{display:inline-flex;align-items:center;padding:10px 18px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:700;text-decoration:none}
-.btnlink:hover{filter:brightness(1.07)}
-#ph{margin:12px 0 0;color:var(--muted);font-size:.82rem}
-#setup .box{width:100%;max-width:520px;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
-#setup h2{margin:0 0 8px;font-size:1.15rem}
-#setup p{color:var(--muted);font-size:.9rem}
-#setup ol{padding-left:20px;color:var(--muted);font-size:.9rem}
-#setup li{margin-bottom:6px}
-#setup input{width:100%;margin:12px 0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px 13px;font:inherit}
-#setup input:focus{outline:none;border-color:var(--accent)}
-#setup .actions{display:flex;gap:10px;margin-top:4px}
-.sec{display:flex;align-items:center;gap:10px;margin:20px 0 12px}
-.sec:first-child{margin-top:6px}
-.sec h2{margin:0;font-size:1.02rem;font-weight:700}
-.sec .sub{font-size:.8rem;color:var(--muted)}
-.sec .sp{flex:1}
-.link{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 4px;font:inherit;font-size:.85rem;white-space:nowrap}
-.link:hover{text-decoration:underline}
-.badge{display:inline-block;font-size:.72rem;font-weight:600;color:var(--accent);background:rgba(242,193,78,.1);border:1px solid rgba(242,193,78,.35);border-radius:999px;padding:3px 10px;margin-top:8px}
-.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -2px;padding:2px 2px 12px;scrollbar-width:none}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:.84rem;color:var(--text);cursor:pointer;white-space:nowrap}
-.chip:hover{border-color:var(--accent);color:var(--accent)}
-.skel{padding:8px;margin-bottom:10px}
-.sk{border-radius:12px;background:linear-gradient(100deg,var(--surface) 40%,var(--surface2) 50%,var(--surface) 60%);background-size:200% 100%;animation:shimmer 1.2s infinite linear}
-.sk-t{aspect-ratio:16/9}
-.sk-l1{height:15px;margin:12px 6px 0}
-.sk-l2{height:12px;margin:9px 6px 4px;width:58%}
-@keyframes shimmer{to{background-position:-200% 0}}
-@media(min-width:700px){.card{grid-template-columns:336px 1fr;gap:14px;align-items:start}.vinfo{padding:4px}.vinfo h3{font-size:1.06rem;-webkit-line-clamp:3}}
-@media(prefers-reduced-motion:reduce){.sk{animation:none}.thumb img{transition:none}}
-@media(prefers-reduced-motion:no-preference){.card,.chip,.iconbtn,#go,.btnlink,.tab,.scard{transition:background .15s,border-color .15s,color .15s}}
-header{flex-wrap:wrap}
-.tabs{flex-basis:100%;display:flex;gap:8px;padding:2px 4px 6px}
-.tab{flex:1;background:transparent;border:1px solid transparent;border-radius:999px;padding:8px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer}
-.tab:hover{color:var(--text)}
-.tab.on{background:var(--surface2);border-color:var(--line);color:var(--text)}
-.sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-@media(min-width:700px){.sgrid{grid-template-columns:repeat(3,1fr)}.sgrid{max-width:100%}}
-.scard{background:transparent;border:1px solid transparent;border-radius:var(--radius);padding:6px;color:inherit;cursor:pointer;text-align:left}
-.scard:hover{background:var(--surface);border-color:var(--line)}
-.scard{position:relative}
-.sthumb{position:relative;overflow:hidden;border-radius:12px;background:var(--surface2);aspect-ratio:9/16}
-.sthumb img{width:100%;height:100%;object-fit:cover;display:block}
-.sinfo{padding:8px 4px 4px}
-.sinfo h4{margin:0 0 2px;font-size:.82rem;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sinfo p{margin:0;font-size:.74rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#shorts{position:fixed;inset:0;z-index:35;background:#000}
-#shorts[hidden]{display:none}
-.sstage{position:relative;height:100dvh;max-width:100vw;aspect-ratio:9/16;margin:0 auto;background:#000;overflow:hidden}
-@supports not (height:100dvh){.sstage{height:100vh}}
-.sframe{position:absolute;inset:0}
-.sframe iframe{width:100%;height:100%;border:0}
-.sgrad{position:absolute;left:0;right:0;bottom:0;padding:48px 14px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.82));pointer-events:none}
-.sgrad h2{margin:0 64px 4px 0;font-size:.95rem;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.sgrad p{margin:0 64px 8px 0;font-size:.8rem;color:#C9D4D3}
-.sgrad a{pointer-events:auto;color:var(--accent);font-size:.82rem;font-weight:600}
-#sclose{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:10px;background:rgba(0,0,0,.5)}
-.sbtns{position:absolute;right:8px;bottom:110px;display:flex;flex-direction:column;gap:10px}
-.sbtns .iconbtn{background:rgba(0,0,0,.5);border-color:rgba(255,255,255,.2)}
+  body{background:#0f0f0f;color:#f1f1f1;font-family:Roboto,Arial,sans-serif}
+  .card:hover{background:#272727}
+  .chip{background:#272727}.chip:hover{background:#3d3d3d}
+  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#4d4d4d;border-radius:8px}
+  .line2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  #shortsView{height:calc(100vh - 70px);overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain}
+  .slide{height:calc(100vh - 90px);scroll-snap-align:center;scroll-snap-stop:always;display:flex;justify-content:center;align-items:center}
 </style>
 </head>
 <body>
-<header>
-  <button id="home" class="iconbtn" type="button" aria-label="Ana sayfa" title="Ana sayfa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 3l9 8.5"/><path d="M5.5 10.5V21h5v-6h3v6h5V10.5"/></svg></button>
-  <button id="brandBtn" class="brand" type="button" aria-label="no-tube ana sayfa"><img src="icons/icon.svg" alt=""><span>no-tube</span></button>
-  <div id="f" role="search"><input id="q" type="search" placeholder="Video ara" aria-label="Video ara" autocomplete="off" enterkeyhint="search"><button id="go" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg><span class="lbl">Ara</span></button></div>
-  <button id="cfg" class="iconbtn" type="button" aria-label="API anahtarı" title="API anahtarı"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12 21 2"/><path d="m16 7 3 3"/></svg></button>
-  <div class="tabs" role="tablist"><button id="tabHome" class="tab on" type="button" role="tab">Videolar</button><button id="tabShorts" class="tab" type="button" role="tab">Shorts</button></div>
-</header>
-<main id="res"><div class="msg">Yükleniyor…</div></main>
-
-<section id="player" hidden>
-  <div class="pbar"><button id="back" class="iconbtn" type="button" aria-label="Geri dön"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m11 18-6-6 6-6"/></svg></button><span class="ptitle">Oynatılıyor</span></div>
-  <div class="frame"><iframe id="fr" title="Video oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-  <div class="pinfo"><h2 id="pt"></h2><p id="pc" class="ch"></p>
-    <div class="actions"><button id="alt" type="button">Oynatıcıyı değiştir</button><a id="yt" class="btnlink" target="_blank" rel="noopener noreferrer">YouTube'da aç</a></div>
-    <p id="ph"></p>
-  </div>
-</section>
-
-<section id="shorts" hidden>
-  <div class="sstage" id="sstage">
-    <div class="sframe"><iframe id="sfr" title="Shorts oynatıcı" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-    <button id="sclose" class="iconbtn" type="button" aria-label="Kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-    <div class="sbtns">
-      <button id="sprev" class="iconbtn" type="button" aria-label="Önceki video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></button>
-      <button id="snext" class="iconbtn" type="button" aria-label="Sonraki video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+<header class="sticky top-0 z-50 bg-[#0f0f0f]/95 backdrop-blur border-b border-white/10">
+  <div class="max-w-[1400px] mx-auto flex gap-3 items-center px-4 py-3">
+<button onclick="goHome()" class="text-xl font-bold whitespace-nowrap">▶ <span class="text-red-500">no</span>-tube</button>
+    <div class="flex-1 flex max-w-2xl mx-auto">
+      <input id="q" placeholder="Ara..." class="w-full bg-[#121212] border border-white/20 rounded-l-full px-5 py-2 outline-none focus:border-blue-500" onkeydown="if(event.key==='Enter')doSearch()" />
+      <button onclick="doSearch()" class="bg-[#222] border border-l-0 border-white/20 rounded-r-full px-5">🔍</button>
     </div>
-    <div class="sgrad"><h2 id="st"></h2><p id="sc"></p><a id="syt" target="_blank" rel="noopener noreferrer">YouTube'da aç</a></div>
+    <button onclick="toggleHistory()" class="chip rounded-full px-4 py-2 text-sm">🕘 Geçmiş</button>
+    <button onclick="openShorts()" id="shortsBtn" class="chip rounded-full px-4 py-2 text-sm">⚡ Shorts</button>
   </div>
-</section>
+</header>
 
-<section id="sheet" hidden>
-  <div class="sheetbg" id="sheetBg"></div>
-  <div class="sheetbox" role="dialog" aria-label="İlgilenmiyorum">
-    <p class="stitle" id="sheetTitle"></p>
-    <div id="sheetBtns"></div>
-    <button id="sheetCancel" type="button">Vazgeç</button>
+<main class="max-w-[1400px] mx-auto px-4 py-5">
+  <!-- HOME -->
+  <div id="homeView">
+    <div id="recoBar" class="mb-6 hidden">
+      <h2 class="text-lg font-bold mb-1">Ana Sayfa</h2>
+      <p id="recoNote" class="text-xs text-gray-400 mb-3"></p>
+      <div id="recoRow" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+    </div>
+    <div id="exploreWrap" class="hidden">
+      <h2 id="exploreTitle" class="text-lg font-bold mb-3">🧭 Keşfet</h2>
+      <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+    </div>
   </div>
-</section>
 
-<section id="setup" hidden>
-  <div class="box">
-    <h2>YouTube API anahtarı</h2>
-    <p>Arama için senin kendi ücretsiz anahtarın gerekiyor. Anahtar yalnızca bu cihazın tarayıcısında saklanır.</p>
-    <ol>
-      <li>console.cloud.google.com adresinde yeni proje oluştur.</li>
-      <li>"YouTube Data API v3" servisini etkinleştir.</li>
-      <li>Kimlik bilgileri bölümünden API anahtarı oluştur.</li>
-      <li>Anahtarı sitenin adresiyle sınırla (HTTP yönlendiren) ve yalnızca YouTube Data API v3'e izin ver.</li>
-    </ol>
-    <input id="k" type="password" placeholder="API anahtarını yapıştır" autocomplete="off">
-    <div class="actions"><button id="ks" class="primary" type="button">Kaydet</button><button id="kc" type="button">Vazgeç</button></div>
+  <!-- SHORTS -->
+  <div id="shortsView" class="hidden relative">
+    <button onclick="goHome()" class="fixed left-4 top-20 z-50 chip rounded-full px-4 py-2 text-sm">← Ana Sayfa</button>
+    <div class="fixed right-4 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-2">
+      <button onclick="shortsNav(-1)" class="chip rounded-full px-3 py-2">▲</button>
+      <button onclick="shortsNav(1)" class="chip rounded-full px-3 py-2">▼</button>
+    </div>
+    <div id="shortsFeed"></div>
   </div>
-</section>
 
-<script>
-const $ = id => document.getElementById(id);
-const store = {
-  get(){ try { return localStorage.getItem('ytkey') || ''; } catch(e){ return ''; } },
-  set(v){ try { localStorage.setItem('ytkey', v); } catch(e){} }
-};
-const histStore = {
-  KEY: 'nothistory_v1',
-  MAX: 100,
-  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || '[]'); return Array.isArray(v) ? v : []; } catch(e){ return []; } },
-  set(v){ try { localStorage.setItem(this.KEY, JSON.stringify(v.slice(0, this.MAX))); } catch(e){} },
-  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
-};
-const searchStore = {
-  KEY: 'notsearch_v1',
-  MAX: 50,
-  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || '[]'); return Array.isArray(v) ? v : []; } catch(e){ return []; } },
-  set(v){ try { localStorage.setItem(this.KEY, JSON.stringify(v.slice(0, this.MAX))); } catch(e){} },
-  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
-};
-// Sessize alınanlar: kanal + kelime. Akışlardan (arama ve kanal sayfası hariç) tamamen çıkarılır.
-const muteStore = {
-  KEY: 'notmute_v1',
-  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (v && v.channels && v.words) return v; } catch(e){} return { channels: {}, words: [] }; },
-  set(m){ try { localStorage.setItem(this.KEY, JSON.stringify(m)); } catch(e){} },
-  muteChannel(id, name){ if (!id) return; const m = this.get(); m.channels[id] = name || 'kanal'; this.set(m); },
-  unmuteChannel(id){ const m = this.get(); delete m.channels[id]; this.set(m); },
-  muteWord(w){ w = (w || '').toLowerCase(); if (w.length < 3) return; const m = this.get(); if (!m.words.includes(w)) m.words.push(w); this.set(m); },
-  unmuteWord(w){ const m = this.get(); m.words = m.words.filter(x => x !== w); this.set(m); },
-  sig(){ const m = this.get(); return Object.keys(m.channels).length + 'k:' + m.words.join(','); }
-};
-function isMuted(v, m){
-  m = m || muteStore.get();
-  if (v.channelId && m.channels[v.channelId]) return true;
-  const t = (v.title || '').toLowerCase(); // bilerek tr-TR değil: I/ı tuzağı eşleşmeyi bozmasın
-  return m.words.some(w => t.includes(w));
-}
-// başlıktan sessize alınabilir kelime adayları: en uzun 2 kelime (kısa edatlar elenir)
-const MUTE_SKIP = new Set(['video', 'videosu', 'resmi', 'klibi', 'klip', 'yeni', 'official', 'live', 'canlı', 'canli', 'bölüm', 'bolum', 'sezon', 'fragman', 'tanıtım', 'tanitim', 'ile', 'için', 'gibi']);
-function muteWordHints(title){
-  const seen = new Set(), out = [];
-  (title || '').toLowerCase().split(/[^a-zçğıöşüâîû0-9]+/i).forEach(w => {
-    if (w.length >= 5 && !MUTE_SKIP.has(w) && !seen.has(w)) { seen.add(w); out.push(w); }
-  });
-  return out.sort((a, b) => b.length - a.length).slice(0, 2);
-}
-function recordSearch(q){
-  q = (q || '').trim().slice(0, 80);
-  if (q.length < 2) return;
-  const s = searchStore.get();
-  const i = s.findIndex(x => x.q.toLocaleLowerCase('tr-TR') === q.toLocaleLowerCase('tr-TR'));
-  if (i >= 0) { s[i].count = (s[i].count || 1) + 1; s[i].at = Date.now(); const [it] = s.splice(i, 1); s.unshift(it); }
-  else s.unshift({ q, at: Date.now(), count: 1 });
-  searchStore.set(s);
-}
-let key = store.get(), query = '', next = '', homeMode = true;
+  <!-- WATCH -->
+  <div id="watchView" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2">
+      <div class="aspect-video bg-black rounded-xl overflow-hidden">
+        <video id="player" controls class="w-full h-full hidden"></video>
+        <iframe id="embed" class="w-full h-full hidden" frameborder="0" allowfullscreen allow="accelerometer; autoplay; encrypted-media; picture-in-picture"></iframe>
+      </div>
+      <p id="vTitle" class="font-bold text-lg mt-3"></p>
+      <div class="flex flex-wrap items-center gap-3 mt-2 text-sm text-gray-300">
+        <button id="vAuthor" class="font-semibold hover:text-white" onclick="openChannel(currentAuthorId)"></button>
+        <span id="vMeta" class="text-gray-400"></span>
+        <span class="flex-1"></span>
+        <a id="dlMp4" class="chip rounded-full px-3 py-1.5" href="#">⬇ MP4</a>
+        <a id="dlMp3" class="chip rounded-full px-3 py-1.5" href="#">🎵 MP3</a>
+      </div>
+      <details class="mt-3 bg-[#1f1f1f] rounded-xl p-3 text-sm"><summary class="cursor-pointer font-semibold">Açıklama</summary><p id="vDesc" class="whitespace-pre-wrap text-gray-300 mt-2"></p></details>
+      <h3 class="font-bold mt-5 mb-2">💬 Yorumlar</h3>
+      <div id="comments" class="space-y-3 text-sm"></div>
+    </div>
+    <div><h3 class="font-bold mb-2">⏭ Sıradakiler (algoritma sıralı)</h3><div id="related" class="space-y-3"></div></div>
+  </div>
 
-// --- Öneri algoritması: başlıklardan çıkarım YOK, sadece kanallar + senin aramaların ---
-// Neden: başlık kelimesi eşleşmesi ("değiştim" videosu -> her yer "sad edit") gürültü üretiyordu.
-function buildProfile(hist, searches){
-  const chan = new Map(); // channelId -> {w, name}
-  const now = Date.now();
-  (hist || []).forEach(h => {
-    if (!h.channelId) return;
-    const ageDays = Math.max(0, (now - (h.at || now)) / 864e5);
-    const decay = Math.pow(0.93, ageDays); // eski izlemeler yavaşça unutulur
-    const w = decay * (1 + Math.min(h.count || 1, 5) * 0.3) * 3;
-    const prev = chan.get(h.channelId) || { w: 0, name: h.channel };
-    chan.set(h.channelId, { w: prev.w + w, name: h.channel || prev.name });
-  });
-  // ham arama sorguların (senin kendi cümlelerin, başlıklardan türetilmiş kelime değil)
-  const queries = (searches || [])
-    .map(s => {
-      const ageDays = Math.max(0, (now - (s.at || now)) / 864e5);
-      return { q: s.q, w: Math.pow(0.90, ageDays) * (1 + Math.min(s.count || 1, 5) * 0.25) };
-    })
-    .sort((a, b) => b.w - a.w)
-    .slice(0, 4);
-  return { chan, queries };
-}
-function scoreVideo(v, profile, watchedIds){
-  let s = 0;
-  const c = v.channelId && profile.chan.get(v.channelId);
-  // sqrt sönümü: 5 kez izlenen kanal, 1 kez izleneni ezmesin — yeni ilgiler de yüzeye çıksın
-  if (c) s += 4 * Math.sqrt(c.w);
-  if (watchedIds.has(v.id)) s -= 8; // izleneni geri it
-  return s;
-}
-// harmanlama: skor sırası yerine kaynaklar arası round-robin — tek konu sayfayı ele geçiremesin
-// aynı kanal üst üste en fazla 2 kez gelir
-function blendFeed(videos){
-  const groups = { q: [], ch: [], tr: [] };
-  videos.forEach(v => {
-    if (v.src === 'trend') groups.tr.push(v);
-    else if (v.src.indexOf('sana özel arama:') === 0) groups.q.push(v);
-    else groups.ch.push(v);
-  });
-  Object.values(groups).forEach(g => g.sort((a, b) => b._s - a._s));
-  const order = ['q', 'ch', 'tr'];
-  const out = [];
-  for (;;) {
-    let moved = false;
-    for (const k of order) {
-      const g = groups[k];
-      if (!g.length) continue;
-      let idx = g.findIndex(v => {
-        const n = out.length;
-        return n < 2 || !(out[n - 1].channelId && out[n - 1].channelId === v.channelId && out[n - 2].channelId === v.channelId);
-      });
-      if (idx < 0) idx = 0;
-      out.push(g.splice(idx, 1)[0]);
-      moved = true;
-    }
-    if (!moved) break;
-  }
-  return out;
-}
-// rozetler: sadece kanal + hangi aramandan geldiği (başlık kelimesi yok)
-function reasonFor(v, profile, chanName){
-  const out = [];
-  if (v.channelId && profile.chan.get(v.channelId)) out.push((chanName || v.channel || 'kanal') + ' sık izlediğin kanal');
-  return out;
-}
-const recCache = {
-  KEY: 'notrec_cache_v1',
-  TTL: 20 * 60 * 1000, // 20 dk: kişisel aramalar kota yaktığı için her açılışta harcamayalım
-  get(){ try { const c = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (c && Date.now() - c.at < this.TTL) return c; } catch(e){} return null; },
-  set(feed, q){ try { localStorage.setItem(this.KEY, JSON.stringify({ at: Date.now(), feed: feed.slice(0, 30), q })); } catch(e){} },
-  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
-};
-// Shorts önbelleği: kısa video aramaları da kota yakar (100 birim), 20 dk saklanır
-const shortCache = {
-  KEY: 'notshorts_cache_v1',
-  TTL: 20 * 60 * 1000,
-  get(){ try { const c = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (c && Date.now() - c.at < this.TTL) return c; } catch(e){} return null; },
-  set(feed, q){ try { localStorage.setItem(this.KEY, JSON.stringify({ at: Date.now(), feed: feed.slice(0, 30), q })); } catch(e){} },
-  clear(){ try { localStorage.removeItem(this.KEY); } catch(e){} }
-};
-function saveWatch(v){
-  if (!v || !v.id) return;
-  const h = histStore.get();
-  const i = h.findIndex(x => x.id === v.id);
-  if (i >= 0) {
-    h[i].count = (h[i].count || 1) + 1;
-    h[i].at = Date.now();
-    h[i].title = v.title; h[i].thumb = v.thumb;
-    const [it] = h.splice(i, 1); h.unshift(it);
-  } else {
-    h.unshift({ id: v.id, title: v.title, channel: v.channel, channelId: v.channelId, thumb: v.thumb, at: Date.now(), count: 1 });
-  }
-  histStore.set(h);
-}
+  <!-- CHANNEL -->
+  <div id="channelView" class="hidden">
+    <button onclick="goHome()" class="chip rounded-full px-4 py-1.5 text-sm mb-3">← Geri</button>
+    <div id="chHead" class="flex gap-4 items-center"></div>
+    <div id="chGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4"></div>
+  </div>
+</main>
 
-const dec = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
-const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); kids.forEach(k => n.append(k)); return n; };
-const msg = (t, err) => $('res').replaceChildren(el('div', { className: 'msg' + (err ? ' err' : ''), textContent: t }));
-const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' }); } catch(e){ return ''; } };
+<div id="histPanel" class="hidden fixed right-0 top-0 h-full w-80 bg-[#1a1a1a] border-l border-white/10 p-4 z-50 overflow-y-auto">
+  <div class="flex justify-between items-center mb-3"><b>İzleme Geçmişi</b><button onclick="toggleHistory()">✖</button></div>
+  <button onclick="clearHistory()" class="text-xs text-red-400 mb-3">Temizle</button>
+  <div id="histList" class="space-y-2 text-sm"></div>
+</div>
 
-function showSetup(open){ $('setup').hidden = !open; if (open) { $('k').value = ''; $('k').focus(); } }
-$('cfg').onclick = () => showSetup(true);
-$('kc').onclick = () => showSetup(false);
-$('ks').onclick = () => {
-  const v = $('k').value.trim();
-  if (!v) return;
-  key = v; store.set(v); showSetup(false);
-  if (mode === 'shorts') showShorts(true);
-  else if (homeMode) showHome(); else if (query) search(query);
-};
-$('home').onclick = goHome;
-$('brandBtn').onclick = goHome;
-let mode = 'home'; // 'home' | 'shorts'
-let homeBusy = false, shortsBusy = false; // üst üste istek kilidi (429 hız sınırı koruması)
-const cds = { home: 0, shorts: 0 };
-// 429 sayacı: buton süre bitene kadar kilitli kalır, çünkü beklerken basılan her istek ceza süresini uzatır
-function cooldownBtn(box, slot, label, fn, secs){
-  secs = Math.max(5, Math.ceil(secs || 60));
-  const rb = el('button', { className: 'more', type: 'button', textContent: label + ' (' + secs + ')', disabled: true });
-  box.append(rb);
-  clearInterval(cds[slot]);
-  let s = secs;
-  cds[slot] = setInterval(() => {
-    s--;
-    if (!document.body.contains(rb)) { clearInterval(cds[slot]); cds[slot] = 0; return; }
-    if (s <= 0) { clearInterval(cds[slot]); cds[slot] = 0; rb.disabled = false; rb.textContent = label; rb.onclick = fn; }
-    else rb.textContent = label + ' (' + s + ')';
-  }, 1000);
-}
-// Devre kesici: 429 cezası sürerken HİÇ istek atılmaz (sayfa açılışı dahil).
-// localStorage'da durur, sekme kapatılıp açılsa da korunur. Başarılı istekte sıfırlanır.
-const rlStore = {
-  KEY: 'notrl_v1',
-  STEPS: [90, 300, 900], // sn: üst üste 429'da mola büyür (1.5dk → 5dk → 15dk)
-  get(){ try { const v = JSON.parse(localStorage.getItem(this.KEY) || 'null'); if (v && typeof v.until === 'number') return v; } catch(e){} return { until: 0, fails: 0 }; },
-  set(v){ try { localStorage.setItem(this.KEY, JSON.stringify(v)); } catch(e){} },
-  hit(){ const s = this.get(); const fails = (s.fails || 0) + 1; const wait = this.STEPS[Math.min(fails - 1, this.STEPS.length - 1)]; this.set({ until: Date.now() + wait * 1000, fails }); return wait; },
-  reset(){ this.set({ until: 0, fails: 0 }); },
-  remaining(){ return Math.max(0, Math.ceil((this.get().until - Date.now()) / 1000)); }
-};
-function rlBlock(box, slot, retryFn){
-  const left = rlStore.remaining();
-  if (left <= 0) return false;
-  box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırı molası sürüyor (' + left + ' sn kaldı). Bu sürede istek atılmıyor — atılırsa ceza uzar.' }));
-  cooldownBtn(box, slot, 'Tekrar dene', () => retryFn(true), left);
-  return true;
-}
-function setTab(m){
-  mode = m;
-  $('tabHome').classList.toggle('on', m === 'home');
-  $('tabShorts').classList.toggle('on', m === 'shorts');
-}
-$('tabHome').onclick = () => goHome();
-$('tabShorts').onclick = () => { closePlayer(); showShorts(); };
-function goHome(){ setTab('home'); homeMode = true; query = ''; next = ''; $('q').value = ''; showHome(); }
-
-const normSearch = it => ({ id: it.id.videoId, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
-const normPopular = it => ({ id: it.id, title: dec(it.snippet.title), channel: dec(it.snippet.channelTitle), channelId: it.snippet.channelId || '', thumb: it.snippet.thumbnails?.medium?.url || '', publishedAt: it.snippet.publishedAt });
-
-function makeCard(v, opts = {}){
-  const img = el('img', { src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' });
-  const thumb = el('div', { className: 'thumb' }, img);
-  const info = el('div', { className: 'vinfo' }, el('h3', { textContent: v.title }), el('p', { className: 'meta', textContent: v.channel + (v.publishedAt ? ' • ' + fmtDate(v.publishedAt) : '') }));
-  if (opts.badge) info.append(el('span', { className: 'badge', textContent: opts.badge }));
-  const mute = el('button', { className: 'mute', type: 'button', ariaLabel: 'İlgilenmiyorum', textContent: '⋯' });
-  mute.onclick = (e) => { e.stopPropagation(); openSheet(v); };
-  const card = el('div', { className: 'card', role: 'button', tabIndex: 0 }, thumb, info, mute);
-  card.onclick = () => play(v);
-  card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(v); } };
-  return card;
-}
-// iskelet kartlar: API beklenirken YouTube tarzı gri bloklar
-function skeletons(box, n){
-  for (let i = 0; i < n; i++) {
-    const s = el('div', { className: 'skel', ariaHidden: 'true' },
-      el('div', { className: 'sk sk-t' }),
-      el('div', { className: 'sk sk-l1' }),
-      el('div', { className: 'sk sk-l2' }));
-    box.append(s);
-  }
-}
-function section(title, sub){
-  const h = el('div', { className: 'sec' }, el('h2', { textContent: title }));
-  if (sub) h.append(el('span', { className: 'sub', textContent: sub }));
-  h.append(el('span', { className: 'sp' }));
-  return h;
-}
-// "İlgilenmiyorum" alt menüsü: kanalı veya başlıktaki kelimeyi sessize al
-function closeSheet(){ $('sheet').hidden = true; }
-function openSheet(v){
-  $('sheetTitle').textContent = v.title || '';
-  const box = $('sheetBtns');
-  box.replaceChildren();
-  if (v.channelId) {
-    const b = el('button', { className: 'sheetbtn', type: 'button' }, document.createTextNode('🔇 ' + (v.channel || 'kanal')));
-    b.append(el('small', { textContent: 'bu kanalı bir daha gösterme' }));
-    b.onclick = () => { muteStore.muteChannel(v.channelId, v.channel); closeSheet(); refreshAfterMute(); };
-    box.append(b);
-  }
-  muteWordHints(v.title).forEach(w => {
-    const b = el('button', { className: 'sheetbtn', type: 'button' }, document.createTextNode('🔇 "' + w + '"'));
-    b.append(el('small', { textContent: 'başlığında bu geçenleri gösterme' }));
-    b.onclick = () => { muteStore.muteWord(w); closeSheet(); refreshAfterMute(); };
-    box.append(b);
-  });
-  $('sheet').hidden = false;
-}
-function refreshAfterMute(){
-  recCache.clear();
-  shortCache.clear();
-  if (mode === 'shorts') showShorts(true);
-  else if (homeMode) showHome(true);
-  else if (query) search(query);
-  else showHome(true);
-}
-$('sheetCancel').onclick = closeSheet;
-$('sheetBg').onclick = closeSheet;
-
-// Anasayfa: geçmiş + kişisel adaylar + trendler (kişisel arama kota yakar, 20 dk önbellekli)
-async function showHome(force){
-  if (homeBusy) return;
-  clearInterval(cds.home);
-  homeMode = true;
-  const root = $('res');
-  const hist = histStore.get();
-  const searches = searchStore.get();
-  const hasSignal = hist.length || searches.length;
-  root.replaceChildren();
-
-  // 1) Sinyaller (çevrimdışı da çalışır) — izlediklerin listelenmez, sessizce kanal skorunu besler
-  if (!hasSignal) {
-    root.append(el('div', { className: 'msg', textContent: 'Henüz bir şey izlemedin ya da aramadın. Aşağıdaki trendlerden başla; izledikçe kanalların, aradıkça sorguların anasayfayı şekillendirecek.' }));
-  } else {
-    // son aramalar: ham sorguların, tek dokunuşla tekrar ara
-    if (searches.length) {
-      const ss = section('Son aramalar', searches.length + ' sorgu');
-      const clrS = el('button', { className: 'link', type: 'button', textContent: 'Aramaları temizle' });
-      clrS.onclick = () => { searchStore.clear(); recCache.clear(); shortCache.clear(); showHome(true); };
-      ss.append(clrS);
-      root.append(ss);
-      const chipsS = el('div', { className: 'chips' });
-      searches.slice(0, 8).forEach(s => {
-        const c = el('button', { className: 'chip', type: 'button', textContent: '🔍 ' + s.q });
-        c.onclick = () => { $('q').value = s.q; doSearch(); };
-        chipsS.append(c);
-      });
-      root.append(chipsS);
-    }
-    // izleme listesi gösterilmez — izlediklerin sessizce kanal skorunu besler
-  }
-
-  // 2) Öneriler / trendler
-  const prof0 = hasSignal ? buildProfile(hist, searches) : null;
-  const profSum = prof0 ? hist.length + ' video • ' + searches.length + ' arama • ' + prof0.chan.size + ' kanal' : '';
-  const fs = section(hasSignal ? 'Senin için' : 'Trendler — Türkiye', hasSignal ? profSum + ' üzerinden' : '');
-  if (hasSignal) {
-    const yenile = el('button', { className: 'link', type: 'button', textContent: 'Önerileri yenile' });
-    yenile.onclick = () => { recCache.clear(); showHome(true); };
-    fs.append(yenile);
-    if (hist.length) {
-      const clrH = el('button', { className: 'link', type: 'button', textContent: 'Geçmişi temizle' });
-      clrH.onclick = () => { histStore.clear(); recCache.clear(); shortCache.clear(); showHome(true); };
-      fs.append(clrH);
-    }
-  }
-  root.append(fs);
-  const feedBox = el('div', {});
-  root.append(feedBox);
-
-  if (!key) {
-    feedBox.append(el('div', { className: 'msg', textContent: 'Trendleri görmek için API anahtarını gir.' }));
-    const b = el('button', { className: 'more', type: 'button', textContent: 'Anahtarı gir' });
-    b.onclick = () => showSetup(true);
-    feedBox.append(b);
-    return;
-  }
-  // önbellek: aynı sinyalle 20 dk içinde tekrar kota harcama
-  const prof = prof0 || { chan: new Map(), queries: [] };
-  const mutes = muteStore.get();
-  const topChanIds = [...prof.chan.entries()].sort((a, b) => b[1].w - a[1].w).slice(0, 2).map(([id]) => id);
-  const topQueries = prof.queries.slice(0, 2).map(x => x.q);
-  const cacheKey = hasSignal ? [...topChanIds, ...topQueries].join('|') + '#' + hist.length + 'v' + searches.length + 's+' + muteStore.sig() : 'trend';
-  if (!force) {
-    const cached = recCache.get();
-    if (cached && cached.q === cacheKey && cached.feed?.length) {
-      renderFeed(feedBox, cached.feed, hist, prof, true);
-      return;
-    }
-  }
-  if (rlBlock(feedBox, 'home', (f) => showHome(f))) return;
-  feedBox.append(el('div', { className: 'msg', textContent: hasSignal ? 'İlgilerine göre öneriler hazırlanıyor…' : 'Trendler yükleniyor…' }));
-  skeletons(feedBox, 3);
-  homeBusy = true;
-  try {
-    // A) trendler (1 kota) — her zaman taban
-    const u = new URL('https://www.googleapis.com/youtube/v3/videos');
-    u.search = new URLSearchParams({ part: 'snippet', chart: 'mostPopular', regionCode: 'TR', maxResults: '25', key });
-    const r = await fetch(u);
-    let d = {};
-    try { d = await r.json(); } catch (je) { d = {}; }
-    if (!r.ok) throw { resp: r, data: d };
-    const trends = ((d && d.items) || []).map(normPopular).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'trend' }));
-
-    // B) kişisel adaylar (100 kota/arama) — en fazla 2 arama:
-    //   1) en güçlü ham sorgun (senin cümlen), 2) en çok izlediğin kanalın son videoları (channelId)
-    let personal = [];
-    if (hasSignal) {
-      if (topQueries.length) {
-        const q = topQueries[0];
-        try {
-          const su = new URL('https://www.googleapis.com/youtube/v3/search');
-          su.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', q, key });
-          const sr = await fetch(su);
-          let sd = {};
-          try { sd = await sr.json(); } catch (je) { sd = {}; }
-          if (sr.ok) personal.push(...((sd.items || [])).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: 'sana özel arama: ' + q })));
-          else if (sd.error?.errors?.[0]?.reason === 'quotaExceeded') throw { resp: sr, data: sd };
-          else if (sr.status === 429) rlStore.hit();
-        } catch (e) { if (e?.resp) throw e; /* ağ patlarsa trendlere düş */ }
-      }
-      if (topChanIds.length) {
-        const cid = topChanIds[0];
-        try {
-          const cu = new URL('https://www.googleapis.com/youtube/v3/search');
-          cu.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '12', order: 'date', channelId: cid, key });
-          const cr = await fetch(cu);
-          let cd = {};
-          try { cd = await cr.json(); } catch (je) { cd = {}; }
-          if (cr.ok) {
-            const cname = prof.chan.get(cid)?.name || 'kanalın';
-            personal.push(...((cd.items || [])).map(normSearch).filter(v => v.id && v.thumb).map(v => ({ ...v, src: cname + ' kanalından yeni' })));
-          } else if (cr.status === 429) rlStore.hit();
-        } catch (e) { /* kanal araması patlarsa sorun değil */ }
-      }
-    }
-
-    // birleştir + sessize alınanları çıkar + skorla + sırala
-    const seen = new Set(), merged = [];
-    [...personal, ...trends].forEach(v => { if (!seen.has(v.id) && !isMuted(v, mutes)) { seen.add(v.id); merged.push(v); } });
-    const watchedIds = new Set(hist.map(h => h.id));
-    const chanName = {};
-    hist.forEach(h => { if (h.channelId && !chanName[h.channelId]) chanName[h.channelId] = h.channel; });
-    let videos = merged.map(v => ({ ...v, _s: hasSignal ? scoreVideo(v, prof, watchedIds) : 0, _why: hasSignal ? reasonFor(v, prof, chanName[v.channelId]) : [] }));
-    // kişisel adaylara küçük boost: sırf trendler ezmesin (kanal + arama adayları)
-    videos.forEach(v => { if (v.src !== 'trend') v._s += 1.5; });
-    videos = blendFeed(videos); // skor sırası değil, kaynaklar arası harman
-    recCache.set(videos, cacheKey);
-    rlStore.reset();
-    renderFeed(feedBox, videos, hist, prof, false);
-  } catch (e) {
-    const r = e?.resp, d = e?.data;
-    const reason = d?.error?.errors?.[0]?.reason || '';
-    if (reason === 'quotaExceeded') { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Kanalların ve aramaların kayıtlı, yarın öneriler döner.' })); return; }
-    if (r && r.status === 429) {
-      const wait = rlStore.hit();
-      try { console.warn('[no-tube] 429', d && d.error); } catch (ce) {}
-      feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429). ' + wait + ' sn mola başladı — süre bitmeden istek atılmıyor.' }));
-      cooldownBtn(feedBox, 'home', 'Tekrar dene', () => showHome(true), wait);
-      return;
-    }
-    if (r && (r.status === 400 || r.status === 403)) { feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu. "Anahtar" düğmesinden kontrol et.' })); return; }
-    feedBox.replaceChildren(el('div', { className: 'msg err', textContent: 'Bağlantı kurulamadı. Son aramaların çevrimdışı kullanılabilir.' }));
-  } finally { homeBusy = false; }
-}
-
-function renderFeed(feedBox, videos, hist, prof, fromCache){
-  feedBox.replaceChildren();
-  if (!videos.length) { feedBox.append(el('div', { className: 'msg', textContent: 'Şu an öneri yok.' })); return; }
-  const watchedIds = new Set(hist.map(h => h.id));
-  const nPersonal = videos.filter(v => v._s > 0).length;
-  if (hist.length || searchStore.get().length) {
-    feedBox.append(el('div', { className: 'msg', textContent: nPersonal ? nPersonal + ' video kanalların/aramalarınla eşleşti' + (fromCache ? ' (önbellek)' : '') + '. Rozetler nedenini söyler.' : 'Trendler kanallarınla/aramalarınla eşleşmedi — bir şeyler izle/ara ya da "Önerileri yenile"ye bas. Rozet çıkınca kişiselleşmiş demektir.' }));
-  }
-  videos.slice(0, 20).forEach(v => {
-    let badge = '';
-    if (watchedIds.has(v.id)) badge = 'izlendi';
-    else if (v._why?.length) badge = v._why.slice(0, 2).join(' • ');
-    else if (v.src && v.src !== 'trend') badge = v.src;
-    feedBox.append(makeCard(v, badge ? { badge } : {}));
-  });
-}
-
-// --- Shorts: dikey raf + dikey oynatıcı ---
-// Not: API'de resmi "shorts" filtresi yok; videoDuration=short (<4 dk) standart yaklaşımdır.
-let sque = [], sidx = 0;
-async function showShorts(force){
-  if (shortsBusy) return;
-  clearInterval(cds.shorts);
-  setTab('shorts');
-  homeMode = false;
-  const root = $('res');
-  const hist = histStore.get(), searches = searchStore.get();
-  const prof = buildProfile(hist, searches);
-  const topQ = (prof.queries[0] && prof.queries[0].q) || '';
-  const topChan = [...prof.chan.entries()].sort((a, b) => b[1].w - a[1].w)[0];
-  const cacheKey = 'sh:' + (topQ || '-') + '|' + (topChan ? topChan[0] : '-') + '#' + hist.length + 'v' + searches.length + 's+' + muteStore.sig();
-  root.replaceChildren();
-  const sh = section('Shorts', 'dikey + kısa videolar');
-  const rf = el('button', { className: 'link', type: 'button', textContent: 'Yenile' });
-  rf.onclick = () => { shortCache.clear(); showShorts(true); };
-  sh.append(rf);
-  root.append(sh);
-  const box = el('div', {});
-  root.append(box);
-  if (!key) {
-    box.append(el('div', { className: 'msg', textContent: 'Shorts için API anahtarını gir.' }));
-    const b = el('button', { className: 'more', type: 'button', textContent: 'Anahtarı gir' });
-    b.onclick = () => showSetup(true);
-    box.append(b);
-    return;
-  }
-  if (!force) {
-    const cached = shortCache.get();
-    if (cached && cached.q === cacheKey && cached.feed && cached.feed.length) { renderShorts(box, cached.feed); return; }
-  }
-  if (rlBlock(box, 'shorts', (f) => showShorts(f))) return;
-  box.append(el('div', { className: 'msg', textContent: 'Shorts hazırlanıyor…' }));
-  skeletons(box, 4);
-  shortsBusy = true;
-  try {
-    const fetchShorts = async (params) => {
-      const u = new URL('https://www.googleapis.com/youtube/v3/search');
-      u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', videoDuration: 'short', maxResults: '12', key, ...params });
-      const r = await fetch(u);
-      let d = {};
-      try { d = await r.json(); } catch (je) { d = {}; }
-      if (!r.ok) throw { resp: r, data: d };
-      return ((d && d.items) || []).map(normSearch).filter(v => v.id && v.thumb);
-    };
-    // her aday bağımsız denenir: biri patlasa diğeri yine listeyi doldurur
-    const errs = [];
-    let items = [];
-    if (topQ) {
-      try { items.push(...await fetchShorts({ q: topQ })); }
-      catch (e) { errs.push(e); }
-    } else if (!topChan) {
-      try { items.push(...await fetchShorts({ q: 'shorts', regionCode: 'TR', order: 'viewCount' })); }
-      catch (e) { errs.push(e); }
-    }
-    if (topChan) {
-      try { items.push(...await fetchShorts({ channelId: topChan[0], order: 'date' })); }
-      catch (e) { errs.push(e); }
-    }
-    const seen = new Set(), feed = [];
-    const sm = muteStore.get();
-    items.forEach(v => { if (!seen.has(v.id) && !isMuted(v, sm)) { seen.add(v.id); feed.push(v); } });
-    if (errs.some(e => e && e.resp && e.resp.status === 429)) rlStore.hit();
-    if (!feed.length && errs.length) {
-      const e0 = errs[0] || {}, r0 = e0.resp, d0 = e0.data || {};
-      const reason0 = (d0.error && d0.error.errors && d0.error.errors[0] && d0.error.errors[0].reason) || (e0 instanceof TypeError ? 'ağ hatası' : '');
-      if (reason0 === 'quotaExceeded') { box.replaceChildren(el('div', { className: 'msg err', textContent: 'Günlük kotan doldu. Yarın Shorts döner.' })); return; }
-      if (r0 && r0.status === 429) {
-        const wait = rlStore.hit();
-        try { console.warn('[no-tube] shorts 429', d0 && d0.error); } catch (ce) {}
-        box.replaceChildren(el('div', { className: 'msg err', textContent: 'Hız sınırına takıldın (429). ' + wait + ' sn mola başladı — süre bitmeden istek atılmıyor.' }));
-        cooldownBtn(box, 'shorts', 'Tekrar dene', () => showShorts(true), wait);
-        return;
-      }
-      if (r0 && (r0.status === 400 || r0.status === 403)) { box.replaceChildren(el('div', { className: 'msg err', textContent: 'API anahtarı sorunu (HTTP ' + r0.status + '). "Anahtar" düğmesinden kontrol et.' })); return; }
-      const detail = (r0 ? 'HTTP ' + r0.status : 'ağ') + (reason0 ? ' • ' + reason0 : '');
-      box.replaceChildren(el('div', { className: 'msg err', textContent: 'Shorts alınamadı (' + detail + '). İnternetini kontrol et, sürerse bu yazıyı söyle.' }));
-      return;
-    }
-    shortCache.set(feed, cacheKey);
-    rlStore.reset();
-    renderShorts(box, feed);
-  } catch (e) {
-    box.replaceChildren(el('div', { className: 'msg err', textContent: 'Beklenmedik hata: ' + ((e && e.message) || e) }));
-  } finally { shortsBusy = false; }
-}
-function renderShorts(box, feed){
-  box.replaceChildren();
-  if (!feed.length) { box.append(el('div', { className: 'msg', textContent: 'Shorts bulunamadı. Önce bir şeyler izle ya da ara.' })); return; }
-  const grid = el('div', { className: 'sgrid' });
-  feed.forEach((v, i) => {
-    const mute = el('button', { className: 'mute', type: 'button', ariaLabel: 'İlgilenmiyorum', textContent: '⋯' });
-    mute.onclick = (e) => { e.stopPropagation(); openSheet(v); };
-    const card = el('div', { className: 'scard', role: 'button', tabIndex: 0 },
-      el('div', { className: 'sthumb' }, el('img', { src: v.thumb, alt: '', loading: 'lazy', referrerPolicy: 'no-referrer' })),
-      el('div', { className: 'sinfo' }, el('h4', { textContent: v.title }), el('p', { textContent: v.channel })), mute);
-    card.onclick = () => openShort(i, feed);
-    card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShort(i, feed); } };
-    grid.append(card);
-  });
-  box.append(grid);
-}
-function renderShort(){
-  const v = sque[sidx];
-  if (!v) return;
-  const o = location.protocol.startsWith('http') ? '&origin=' + encodeURIComponent(location.origin) : '';
-  $('sfr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(v.id) + '?autoplay=1&playsinline=1&rel=0' + o;
-  $('st').textContent = v.title || '';
-  $('sc').textContent = v.channel || '';
-  $('syt').href = 'https://www.youtube.com/shorts/' + encodeURIComponent(v.id);
-}
-function openShort(i, feed){
-  sque = feed; sidx = i;
-  saveWatch(sque[sidx]);
-  renderShort();
-  $('shorts').hidden = false;
-  history.pushState({ s: 1 }, '');
-}
-function sStep(d){
-  if (!sque.length) return;
-  sidx = (sidx + d + sque.length) % sque.length;
-  saveWatch(sque[sidx]);
-  renderShort();
-}
-function closeShorts(){ $('sfr').src = 'about:blank'; $('shorts').hidden = true; }
-$('sclose').onclick = () => history.back();
-$('sprev').onclick = () => sStep(-1);
-$('snext').onclick = () => sStep(1);
-(() => {
-  let y0 = null;
-  const st = $('sstage');
-  st.addEventListener('touchstart', e => { y0 = e.changedTouches[0].clientY; }, { passive: true });
-  st.addEventListener('touchend', e => {
-    if (y0 == null) return;
-    const dy = e.changedTouches[0].clientY - y0;
-    y0 = null;
-    if (dy < -50) sStep(1);
-    else if (dy > 50) sStep(-1);
-  }, { passive: true });
-})();
-window.addEventListener('keydown', e => {
-  if ($('shorts').hidden) return;
-  if (e.key === 'ArrowDown') { e.preventDefault(); sStep(1); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); sStep(-1); }
-  else if (e.key === 'Escape') history.back();
-});
-
-async function search(q, token){
-  homeMode = false;
-  setTab('home');
-  if (!key) { showSetup(true); return; }
-  const rlLeft = rlStore.remaining();
-  if (rlLeft > 0 && !token) { msg('Hız sınırı molası (' + rlLeft + ' sn kaldı). Süre bitmeden arama yapılmıyor.'); return; }
-  const u = new URL('https://www.googleapis.com/youtube/v3/search');
-  u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', q, key, ...(token ? { pageToken: token } : {}) });
-  if (!token) { $('res').replaceChildren(); skeletons($('res'), 4); }
-  try {
-    const r = await fetch(u);
-    let d = {};
-    try { d = await r.json(); } catch (je) { d = {}; }
-    if (!r.ok) {
-      const reason = d.error?.errors?.[0]?.reason || '';
-      if (reason === 'quotaExceeded') return msg('Günlük arama kotan doldu. Yarın tekrar dene.', true);
-      if (r.status === 429) { const wait = rlStore.hit(); return msg('Hız sınırı (429). ' + wait + ' sn mola — süre bitmeden arama yapılmıyor.', true); }
-      if (/keyInvalid|badRequest/.test(reason) || r.status === 400) return msg('API anahtarı geçersiz. "Anahtar" düğmesinden yenisini gir.', true);
-      if (r.status === 403) return msg('Erişim reddedildi. Anahtarın bu adresten kullanılmasına izin verilmiş mi kontrol et.', true);
-      return msg('Arama başarısız oldu (' + r.status + ').', true);
-    }
-    rlStore.reset();
-    next = d.nextPageToken || '';
-    renderSearch(((d && d.items) || []).map(normSearch), !!token);
-  } catch (e) {
-    msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
-  }
-}
-
-async function channelVideos(channelId, channelName){
-  homeMode = false;
-  setTab('home');
-  query = '';
-  if (!key) { showSetup(true); return; }
-  const rlLeftC = rlStore.remaining();
-  if (rlLeftC > 0) { msg('Hız sınırı molası (' + rlLeftC + ' sn kaldı). Süre bitmeden istek yapılmıyor.'); return; }
-  $('res').replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
-  skeletons($('res'), 4);
-  try {
-    const u = new URL('https://www.googleapis.com/youtube/v3/search');
-    u.search = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', maxResults: '20', order: 'date', channelId, key });
-    const r = await fetch(u);
-    let d = {};
-    try { d = await r.json(); } catch (je) { d = {}; }
-    if (!r.ok) {
-      const reason = d.error?.errors?.[0]?.reason || '';
-      if (reason === 'quotaExceeded') return msg('Günlük kotan doldu. Yarın tekrar dene.', true);
-      if (r.status === 429) { const wait = rlStore.hit(); return msg('Hız sınırı (429). ' + wait + ' sn mola — süre bitmeden istek yapılmıyor.', true); }
-      return msg('Kanal videoları alınamadı (' + r.status + ').', true);
-    }
-    rlStore.reset();
-    next = '';
-    const items = ((d && d.items) || []).map(normSearch);
-    const root = $('res');
-    root.replaceChildren(section('“' + (channelName || 'kanal') + '”', 'son videolar'));
-    const watchedIds = new Set(histStore.get().map(h => h.id));
-    if (!items.length) { root.append(el('div', { className: 'msg', textContent: 'Bu kanaldan video bulunamadı.' })); return; }
-    items.forEach(v => root.append(makeCard(v, watchedIds.has(v.id) ? { badge: 'izlendi' } : {})));
-  } catch (e) {
-    msg('Bağlantı kurulamadı. İnternetini kontrol et.', true);
-  }
-}
-
-function renderSearch(items, append){
-  const root = $('res');
-  if (!append) root.replaceChildren();
-  root.querySelector('.more')?.remove();
-  const mutes = muteStore.get();
-  items = items.filter(v => !(v.channelId && mutes.channels[v.channelId]));
-  if (!items.length && !append) return msg('Sonuç bulunamadı. Sessize aldıkların gizlenmiş olabilir.');
-  const watchedIds = new Set(histStore.get().map(h => h.id));
-  items.forEach(v => {
-    root.append(makeCard(v, watchedIds.has(v.id) ? { badge: 'izlendi' } : {}));
-  });
-  if (next) {
-    const b = el('button', { className: 'more', type: 'button', textContent: 'Daha fazla göster' });
-    b.onclick = () => { b.disabled = true; search(query, next); };
-    root.append(b);
-  }
-}
-
-const hosts = ['www.youtube-nocookie.com', 'www.youtube.com'];
-let hostIdx = 0, cur = null;
-function load(){
-  const o = location.protocol.startsWith('http') ? '&origin=' + encodeURIComponent(location.origin) : '';
-  $('fr').src = 'https://' + hosts[hostIdx] + '/embed/' + encodeURIComponent(cur.id) + '?autoplay=1&playsinline=1&rel=0' + o;
-  $('ph').textContent = location.protocol.startsWith('http')
-    ? 'Oynatıcı: ' + hosts[hostIdx] + ' (hata verirse "Oynatıcıyı değiştir"e bas)'
-    : 'Bu sayfa dosya olarak açılmış (' + location.protocol + '). YouTube bu durumda Hata 153 verir. Sayfayı bir https adresinden aç ya da aşağıdaki bağlantıyı kullan.';
-  $('ph').textContent += ' | Sayfa adresi: ' + location.origin;
-}
-function play(v){
-  cur = typeof v === 'string' ? { id: v, title: '', channel: '' } : v;
-  saveWatch(cur);
-  $('pt').textContent = cur.title || '';
-  $('pc').textContent = cur.channel || '';
-  $('yt').href = 'https://www.youtube.com/watch?v=' + encodeURIComponent(cur.id);
-  load();
-  $('player').hidden = false;
-  history.pushState({ p: 1 }, '');
-}
-$('alt').onclick = () => { hostIdx = (hostIdx + 1) % hosts.length; load(); };
-function closePlayer(){ $('fr').src = 'about:blank'; $('player').hidden = true; }
-$('back').onclick = () => history.back();
-window.addEventListener('popstate', () => { if (!$('shorts').hidden) closeShorts(); else closePlayer(); });
-
-function doSearch(){
-  query = $('q').value.trim();
-  if (!query) return;
-  next = '';
-  $('q').blur();
-  recordSearch(query);
-  search(query);
-}
-$('go').addEventListener('click', doSearch);
-$('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
-window.addEventListener('error', e => msg('Hata: ' + e.message, true));
-window.addEventListener('unhandledrejection', e => msg('Hata: ' + (e.reason && e.reason.message || e.reason), true));
-
-// PWA: service worker kaydı (sadece https / localhost'ta çalışır)
-if ('serviceWorker' in navigator && (location.protocol.startsWith('http') || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-// açılış: anahtar yoksa kurulum, varsa kişiselleşmiş anasayfa
-if (!key) showSetup(true);
-showHome();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) { navigator.serviceWorker.register('sw.js').catch(() => {}); }</script>
+<script src="api-client.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

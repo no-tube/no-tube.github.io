@@ -1,9 +1,11 @@
 /* no-tube service worker — app-shell cache only, no YouTube/API caching */
-const VERSION = 'v1.13.0';
+const VERSION = 'v2.0.0';
 const CACHE = `notube-${VERSION}`;
 const APP_SHELL = [
   './',
   './index.html',
+  './app.js',
+  './api-client.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
