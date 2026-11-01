@@ -165,29 +165,46 @@ async function goHome() {
   showSidebar();
   loadTrending();
 }
+const TREND_CACHE = 'yt_trend_v1';
+function readTrendCache() {
+  try {
+    const d = JSON.parse(localStorage.getItem(TREND_CACHE));
+    return d && Array.isArray(d.results) && d.results.length ? d : null;
+  } catch { return null; }
+}
+function applyTrend(list, force) {
+  lastRelated = list;
+  hideSkels();
+  // Geçmiş (izleme veya arama) varsa ana sayfa = sadece öneriler. Yoksa (veya Trendler'e basıldıysa) Keşfet göster.
+  if ((getHist().length || getSearches().length) && !force) { $('exploreWrap').classList.add('hidden'); }
+  else {
+    $('exploreWrap').classList.remove('hidden');
+    $('exploreTitle').textContent = 'Trendler — Türkiye';
+    $('grid').innerHTML = list.map(card).join('');
+  }
+  renderReco(list);
+}
 async function loadTrending(force) {
   hideShorts();
   $('watchView').classList.add('hidden'); $('channelView').classList.add('hidden'); $('homeView').classList.remove('hidden');
-  showSkels();
   $('exploreWrap').classList.add('hidden'); $('recoBar').classList.add('hidden');
+  // Son akışı anında göster, taze veriyi arka planda getir.
+  const cached = !force && readTrendCache();
+  if (cached) applyTrend(cached.results, force);
+  else showSkels();
   try {
     const r = await Api.trending();
     const list = r.results || [];
-    lastRelated = list;
-    hideSkels();
-    // Geçmiş (izleme veya arama) varsa ana sayfa = sadece öneriler. Yoksa (veya Trendler'e basıldıysa) Keşfet göster.
-    if ((getHist().length || getSearches().length) && !force) { $('exploreWrap').classList.add('hidden'); }
-    else {
-      $('exploreWrap').classList.remove('hidden');
-      $('exploreTitle').textContent = 'Trendler — Türkiye';
-      $('grid').innerHTML = list.map(card).join('');
-    }
-    renderReco(list);
-  } catch { hideSkels(); $('exploreTitle').textContent = 'Trendler'; $('exploreWrap').classList.remove('hidden'); $('grid').innerHTML = '<p class="text-[#aaaaaa]">Yüklenemedi, sayfayı yenile.</p>'; }
+    try { localStorage.setItem(TREND_CACHE, JSON.stringify({ results: list, t: Date.now() })); } catch {}
+    applyTrend(list, force);
+  } catch {
+    if (!cached) { hideSkels(); $('exploreTitle').textContent = 'Trendler'; $('exploreWrap').classList.remove('hidden'); $('grid').innerHTML = '<p class="text-[#aaaaaa]">Yüklenemedi, sayfayı yenile.</p>'; }
+  }
 }
 
 // Gerçek öneri motoru: geçmişten yeni adaylar bulur (sadece sıralamaz, keşfeder)
 let recoToken = 0;
+let watchToken = 0;
 async function renderReco(pool) {
   const my = ++recoToken;
   const hist = getHist();
@@ -303,16 +320,20 @@ async function doSearch() {
 
 async function watch(id) {
   recoToken++; // bekleyen öneri işini iptal et
+  const my = ++watchToken;
   hideShorts(); hideSidebar();
   $('homeView').classList.add('hidden'); $('channelView').classList.add('hidden'); $('watchView').classList.remove('hidden');
   syncUrl('v=' + id);
   window.scrollTo(0,0);
   $('vTitle').textContent = 'Yükleniyor...'; $('related').innerHTML = ''; $('comments').innerHTML = '';
   $('player').classList.add('hidden'); $('embed').classList.add('hidden');
+  $('comments').innerHTML = Array.from({ length: 4 }, skelComment).join('');
+  const commentsP = Api.comments(id).catch(() => ({ comments: [] }));
   try {
     const metaP = Api.video(id);
     const streamP = Api.stream(id).catch(() => null);
     const meta = await metaP; // bilgi hemen gelsin, stream beklenmesin
+    if (my !== watchToken) return;
     if (meta.error) throw new Error(meta.error);
     $('vTitle').textContent = meta.title;
     $('vAuthor').textContent = meta.author;
@@ -335,6 +356,7 @@ async function watch(id) {
     fetch('https://sponsor.ajay.app/api/skipSegments?videoID=' + id + '&category=sponsor&category=intro&category=outro&category=selfpromo&category=interaction_reminder')
       .then(r => r.ok ? r.json() : [])
       .then(segs => {
+        if (my !== watchToken) return;
         sbSegs = (Array.isArray(segs) ? segs : []).filter(s => s.actionType === 'skip' && s.segment).sort((a, b) => a.segment[0] - b.segment[0]);
         updateSbBtn();
       })
@@ -355,10 +377,11 @@ async function watch(id) {
     // İlgili videoları tam veriyle güncelle (varsa)
     const ranked = rankVideos(meta.related || relatedInit);
     $('related').innerHTML = ranked.map(relCard).join('') || '<p class="text-sm text-[#aaaaaa]">İlgili video yok</p>';
-    $('comments').innerHTML = Array.from({ length: 4 }, skelComment).join('');
-    const c = await Api.comments(id);
+    const c = await commentsP;
+    if (my !== watchToken) return;
     $('comments').innerHTML = (c.comments||[]).slice(0,50).map(commentItem).join('') || '<p class="text-[#aaaaaa]">Yorum yok</p>';
   } catch (e) { // son çare: direkt embed
+    if (my !== watchToken) return;
     $('vTitle').textContent = 'Video açılıyor (yedek oynatıcı)...';
     const em = $('embed'); em.src = `https://www.youtube-nocookie.com/embed/${id}`; em.classList.remove('hidden');
   }

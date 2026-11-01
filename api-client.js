@@ -15,6 +15,19 @@ const PD_INST = [
 
 // Son başarılı instance'ı hatırla; sonraki isteklerde önce onu dene.
 let pdGood = null;
+try {
+  const saved = typeof localStorage !== 'undefined' && localStorage.getItem('pd_good');
+  if (saved && PD_INST.includes(saved)) pdGood = saved;
+} catch {}
+
+const PD_TTL = 5 * 60 * 1000;
+const pdCache = new Map();    // path -> { json, base, exp }
+const pdInflight = new Map(); // path -> Promise (aynı isteği iki kez yapma)
+
+function pdRemember(base) {
+  pdGood = base;
+  try { localStorage.setItem('pd_good', base); } catch {}
+}
 
 const pdThumb = (id) => id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
 // Piped proxy avatar URL'lerini direkt YouTube CDN'e çevir (proxy 502 sık)
@@ -24,32 +37,56 @@ const pdIsHls = (u) => !!u && (/\.m3u8(\?|$)/.test(u) || (u.includes('manifest.g
 const pdGarbage = (s) => !s?.url || s.quality === 'LBRY' || s.url.includes('odycdn.com') || pdIsHls(s.url);
 const pdQNum = (s) => parseInt(s?.quality) || 0;
 
-async function pdFetch(base, path, ms) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const r = await fetch(base + path, { signal: ctrl.signal });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.json();
-  } finally {
-    clearTimeout(t);
-  }
+// Instance'ları sırayla beklemek yerine kısa gecikmelerle yarıştır:
+// ilk başarılı yanıt kazanır, kalanlar iptal edilir. Yavaş/ölü sunucu
+// tüm sayfayı bekletmez.
+function pdRace(path, ms, bases) {
+  return new Promise((resolve, reject) => {
+    let settled = false, remaining = bases.length, lastErr = null;
+    const ctrls = [];
+    bases.forEach((base, idx) => {
+      setTimeout(() => {
+        if (settled) return;
+        const ctrl = new AbortController();
+        ctrls.push(ctrl);
+        const t = setTimeout(() => ctrl.abort(), ms);
+        fetch(base + path, { signal: ctrl.signal })
+          .then((r) => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then((json) => {
+            if (settled) return;
+            settled = true;
+            ctrls.forEach((c) => { if (c !== ctrl) c.abort(); });
+            pdRemember(base);
+            resolve({ json, base });
+          })
+          .catch((e) => {
+            lastErr = e;
+            if (!settled && --remaining === 0) reject(lastErr);
+          })
+          .finally(() => clearTimeout(t));
+      }, idx * 300);
+    });
+  });
 }
 
-async function pp(path, ms = 6000) {
-  let lastErr = null;
-  const ordered = pdGood ? [pdGood, ...PD_INST.filter(b => b !== pdGood)] : PD_INST;
-  for (const base of ordered) {
-    try {
-      const json = await pdFetch(base, path, ms);
-      pdGood = base;
-      return { json, base };
-    } catch (e) {
-      if (pdGood === base) pdGood = null;
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error('piped yok');
+async function pp(path, ms = 6000, ttl = PD_TTL) {
+  const hit = pdCache.get(path);
+  if (hit && hit.exp > Date.now()) return { json: hit.json, base: hit.base };
+  if (pdInflight.has(path)) return pdInflight.get(path);
+
+  const ordered = pdGood ? [pdGood, ...PD_INST.filter((b) => b !== pdGood)] : PD_INST;
+  const job = pdRace(path, ms, ordered)
+    .then((res) => {
+      pdCache.set(path, { json: res.json, base: res.base, exp: Date.now() + ttl });
+      return res;
+    })
+    .finally(() => pdInflight.delete(path));
+
+  pdInflight.set(path, job);
+  return job;
 }
 
 function pdNorm(i) {
