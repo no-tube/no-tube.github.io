@@ -5,11 +5,18 @@ const STATIC = typeof location !== 'undefined' &&
   (location.hostname.endsWith('github.io') || location.protocol === 'file:');
 
 const PD_INST = [
+  'https://pipedapi.adminforge.de',
   'https://pipedapi.ducks.party',
   'https://api.piped.private.coffee',
   'https://pipedapi.reallyaweso.me',
-  'https://api.piped.yt'
+  'https://pipedapi.drgns.space',
+  'https://pipedapi.leptons.xyz',
+  'https://api.piped.yt',
+  'https://pipedapi.orangenet.cc'
 ];
+
+// Son başarılı instance'ı hatırla; sonraki isteklerde önce onu dene.
+let pdGood = null;
 
 const pdThumb = (id) => id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
 // Piped proxy avatar URL'lerini direkt YouTube CDN'e çevir (proxy 502 sık)
@@ -19,17 +26,30 @@ const pdIsHls = (u) => !!u && (/\.m3u8(\?|$)/.test(u) || (u.includes('manifest.g
 const pdGarbage = (s) => !s?.url || s.quality === 'LBRY' || s.url.includes('odycdn.com') || pdIsHls(s.url);
 const pdQNum = (s) => parseInt(s?.quality) || 0;
 
-async function pp(path, ms = 12000) {
+async function pdFetch(base, path, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const r = await fetch(base + path, { signal: ctrl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function pp(path, ms = 6000) {
   let lastErr = null;
-  for (const base of PD_INST) {
+  const ordered = pdGood ? [pdGood, ...PD_INST.filter(b => b !== pdGood)] : PD_INST;
+  for (const base of ordered) {
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), ms);
-      const r = await fetch(base + path, { signal: ctrl.signal });
-      clearTimeout(t);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return { json: await r.json(), base };
-    } catch (e) { lastErr = e; }
+      const json = await pdFetch(base, path, ms);
+      pdGood = base;
+      return { json, base };
+    } catch (e) {
+      if (pdGood === base) pdGood = null;
+      lastErr = e;
+    }
   }
   throw lastErr || new Error('piped yok');
 }

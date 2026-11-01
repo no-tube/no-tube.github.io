@@ -8,7 +8,8 @@
 <meta name="theme-color" content="#0f0f0f" />
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-<script src="https://cdn.tailwindcss.com"></script>
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="tailwind.css" />
 <style>
   :root{ --yt-bg:#0f0f0f; --yt-surface:#1f1f1f; --yt-chip:#272727; --yt-hover:#3f3f3f; --yt-text:#f1f1f1; --yt-dim:#aaaaaa; --yt-line:#303030; }
   html,body{background:var(--yt-bg);color:var(--yt-text);font-family:Roboto,Arial,sans-serif;overflow-x:hidden}
@@ -251,7 +252,20 @@
 <div id="subToast" class="hidden fixed bottom-6 left-6 bg-[#e5e5e5] text-[#0f0f0f] rounded px-4 py-2 text-sm z-[120]"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<script>if ('serviceWorker' in navigator && location.protocol.startsWith('http')) { navigator.serviceWorker.register('sw.js').catch(() => {}); }</script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    if (hadController) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        location.reload();
+      });
+    }
+  }
+</script>
 <script src="api-client.js"></script>
 <script src="app.js"></script>
 </body>

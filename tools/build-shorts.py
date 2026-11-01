@@ -49,10 +49,25 @@ def main():
         if v['id'] not in seen:
             seen.add(v['id'])
             uniq.append(v)
+    uniq = uniq[:200]
+
+    out_path = os.path.join(BASE, 'shorts.json')
+    # Aynı video kümesi zaten yayındaysa dosyayı yeniden yazma; böylece
+    # sıralama rastgeleliği yüzünden her çalışmada boş commit oluşmaz.
+    try:
+        with open(out_path) as f:
+            old = json.load(f)
+        old_ids = {v.get('id') for v in old.get('results', []) if v.get('id')}
+        if old_ids and {v['id'] for v in uniq} == old_ids:
+            print('shorts.json değişmedi, yazılmadı')
+            return
+    except (OSError, ValueError):
+        pass
+
     random.shuffle(uniq)
     data = {'updated': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            'results': uniq[:200]}
-    with open(os.path.join(BASE, 'shorts.json'), 'w') as f:
+            'results': uniq}
+    with open(out_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False)
     print(f"shorts.json: {len(data['results'])} video")
 

@@ -1,16 +1,18 @@
 /* no-tube service worker — app-shell cache only, no YouTube/API caching */
-const VERSION = 'v2.0.0';
+const VERSION = 'v2.1.0';
 const CACHE = `notube-${VERSION}`;
 const APP_SHELL = [
   './',
   './index.html',
   './app.js',
   './api-client.js',
+  './tailwind.css',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-maskable-512.png'
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -49,7 +51,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets: cache-first, then network + populate cache.
+  // Code and styles: network-first so new deployments apply immediately,
+  // falling back to the cached copy when offline.
+  const dest = request.destination;
+  if (dest === 'script' || dest === 'style' || dest === 'worker' || dest === 'document') {
+    event.respondWith(
+      fetch(request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(request, { ignoreSearch: false }))
+    );
+    return;
+  }
+
+  // Other same-origin assets (images, fonts): cache-first, then network + populate cache.
   event.respondWith(
     caches.match(request, { ignoreSearch: false }).then(
       (hit) =>
