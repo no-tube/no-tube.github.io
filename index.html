@@ -24,11 +24,12 @@
   .sidebar-item:hover{background:#272727}
   .sidebar-item svg{flex-shrink:0}
   #sidebar::-webkit-scrollbar{width:8px}#sidebar:hover::-webkit-scrollbar-thumb{background:#575757}
-  .searchbar{background:var(--yt-bg);border:1px solid #303030;border-radius:20px 0 0 20px}
-  .searchbar:focus-within{border-color:#1c62b9;padding-left:44px}
-  .searchbox{background:none;border:none;outline:none;width:100%;height:24px;color:#f1f1f1;padding-left:16px}
-  .searchbtn{background:#222;border:1px solid #303030;border-left:none;border-radius:0 20px 20px 0;width:64px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .searchbar{background:var(--yt-bg);border:1px solid #303030;border-radius:20px 0 0 20px;min-width:0}
+  .searchbar:focus-within{border-color:#1c62b9}
+  .searchbox{background:none;border:none;outline:none;width:100%;min-width:0;height:24px;color:#f1f1f1;padding-left:16px}
+  .searchbtn{background:#222;border:1px solid #303030;border-left:none;border-radius:0 20px 20px 0;width:64px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .searchbtn:hover{background:#313131;border-color:#303030}
+  @media(max-width:640px){.searchbtn{width:46px}.searchbox{padding-left:12px}}
   .iconbtn{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .iconbtn:hover{background:#272727}
   .chip{background:var(--yt-chip);color:#f1f1f1}.chip:hover{background:var(--yt-hover)}
@@ -70,15 +71,15 @@
   <button class="iconbtn" onclick="toggleSidebar()" title="Menü">
     <svg viewBox="0 0 24 24" class="w-6 h-6" fill="#f1f1f1"><path d="M21 6H3V5h18v1zm0 5H3v1h18v-1zm0 6H3v1h18v-1z"/></svg>
   </button>
-  <a onclick="goHome()" class="flex items-center cursor-pointer select-none mr-1" title="no-tube Ana Sayfa">
-    <svg viewBox="0 0 34 24" class="w-9 h-6">
+  <a onclick="goHome()" class="flex items-center cursor-pointer select-none mr-1 shrink-0" title="no-tube Ana Sayfa">
+    <svg viewBox="0 0 34 24" class="w-8 h-6 sm:w-9">
       <path d="M33 6.2c0-2.4-1.6-4.2-3.8-4.7C26 1 17 1 17 1S8 1 4.8 1.5C2.6 2 1 3.8 1 6.2V17.8c0 2.4 1.6 4.2 3.8 4.7C8 23 17 23 17 23s9 0 12.2-.5c2.2-.5 3.8-2.3 3.8-4.7V6.2z" fill="#FF0000"/>
       <path d="M13.5 17V7l9 5-9 5z" fill="#fff"/>
     </svg>
-    <span class="text-[20px] font-medium tracking-tight -ml-0.5">no<span class="text-[#FF0000]">-</span>tube</span>
+    <span class="hidden sm:inline text-[20px] font-medium tracking-tight -ml-0.5">no<span class="text-[#FF0000]">-</span>tube</span>
   </a>
-  <div class="flex-1 flex justify-center max-w-[640px] mx-auto">
-    <div class="flex w-full">
+  <div class="flex-1 min-w-0 flex justify-center max-w-[640px] mx-auto">
+    <div class="flex w-full min-w-0">
       <div class="searchbar flex flex-1 items-center relative">
         <input id="q" class="searchbox" placeholder="Ara" onkeydown="if(event.key==='Enter')doSearch()" />
       </div>
@@ -185,14 +186,8 @@
             <button id="vAuthor" class="font-medium block hover:opacity-80 truncate max-w-[160px] sm:max-w-xs" onclick="openChannel(currentAuthorId)"></button>
             <span id="vMeta" class="text-xs text-[#aaaaaa] truncate"></span>
           </div>
-          <button onclick="subToast()" class="ml-2 bg-white text-black rounded-full px-4 h-9 text-sm font-medium hover:bg-[#e5e5e5] shrink-0">Abone Ol</button>
         </div>
         <div class="flex items-center gap-2 flex-wrap ml-auto">
-          <button id="likeBtn" class="apill" onclick="likePill(this)">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.77 11h-4.23l1.52-4.94C16.38 5.03 15.54 4 14.38 4c-.58 0-1.14.24-1.52.65L7 11H3v10h4h13.66c1.13 0 2.07-.84 2.22-1.96l1-8A2.25 2.25 0 0021.66 11h-2.89zM4 20v-8h2v8H4zm16.98-8.72l-1 8c-.07.41-.43.72-.85.72H7V11.4l5.36-6.32c.16-.18.42-.28.68-.28.49 0 .84.4.7.8L11.6 12h7.17z"/></svg>
-            <span id="likeCount" class="apill-text"></span>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.23 13h4.23l-1.52 4.94C7.62 18.97 8.46 20 9.62 20c.58 0 1.14-.24 1.52-.65L17 13h4V3h-4H7.34c-1.13 0-2.07.84-2.22 1.96l-1 8A2.25 2.25 0 002.34 13h2.89zM20 4v8h-2V4h2zm-16.98 8.72l1-8C4.09 4.31 4.45 4 4.87 4H17v8.6l-5.36 6.32c-.16.18-.42.28-.68.28-.49 0-.84-.4-.7-.8L12.4 12H5.23z"/></svg>
-          </button>
           <button class="apill" onclick="shareToast()">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5.63L20.66 12 15 18.37V15v-1h-1c-3.96 0-7.14 1-9.75 3.09 1.84-4.07 5.11-6.4 9.89-7.1l.86-.13V9V5.63M14 3v6C6.22 10.13 3.11 15.33 2 21c2.78-3.97 6.44-5.78 12-5.78V21l8-9-8-9z"/></svg>
             <span class="hidden sm:inline">Paylaş</span>

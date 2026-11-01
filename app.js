@@ -52,12 +52,10 @@ function toast(msg) {
   clearTimeout(t._t);
   t._t = setTimeout(() => t.classList.add('hidden'), 2000);
 }
-function subToast() { toast('no-tube: Abonelikler bu sürümde simülasyon 😄'); }
 function shareToast() {
   const url = $('embed')?.src || location.href;
   try { navigator.clipboard.writeText(url); toast('Bağlantı kopyalandı'); } catch { toast('Paylaşım bağlantısı: ' + url); }
 }
-function likePill() { toast('Begenme burada simülasyon modunda 🙃'); }
 function doSearchPrompt(q) { $('q').value = q; doSearch(); }
 
 // ---------- Geçmiş + Algoritma ----------
@@ -322,8 +320,6 @@ async function watch(id) {
     $('vAvatar').style.background = meta.avatar ? 'transparent' : chColor(meta.author);
     currentAuthorId = meta.authorId;
     $('vMeta').textContent = '';
-    const likes = Number(meta.likes || 0);
-    $('likeCount').textContent = likes ? shortNum(likes) : '';
     $('vMetaTop').textContent = `${fmtViews(meta.views)}${meta.published ? ' • ' + fmtDate(meta.published) : ''}`;
     $('vDesc').textContent = meta.description || '';
     $('descBox').open = false;
