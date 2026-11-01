@@ -5,14 +5,12 @@ const STATIC = typeof location !== 'undefined' &&
   (location.hostname.endsWith('github.io') || location.protocol === 'file:');
 
 const PD_INST = [
-  'https://pipedapi.adminforge.de',
   'https://pipedapi.ducks.party',
   'https://api.piped.private.coffee',
   'https://pipedapi.reallyaweso.me',
-  'https://pipedapi.drgns.space',
   'https://pipedapi.leptons.xyz',
-  'https://api.piped.yt',
-  'https://pipedapi.orangenet.cc'
+  'https://pipedapi.drgns.space',
+  'https://api.piped.yt'
 ];
 
 // Son başarılı instance'ı hatırla; sonraki isteklerde önce onu dene.
