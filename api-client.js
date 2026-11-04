@@ -72,12 +72,16 @@ function pdRace(path, ms, bases) {
   });
 }
 
-async function pp(path, ms = 6000, ttl = PD_TTL) {
+async function pp(path, ms = 6000, ttl = PD_TTL, rotate = false) {
   const hit = pdCache.get(path);
-  if (hit && hit.exp > Date.now()) return { json: hit.json, base: hit.base };
+  if (hit && hit.exp > Date.now() && !rotate) return { json: hit.json, base: hit.base };
   if (pdInflight.has(path)) return pdInflight.get(path);
 
-  const ordered = pdGood ? [pdGood, ...PD_INST.filter((b) => b !== pdGood)] : PD_INST;
+  // rotate=true: bilinen iyi instance'ı atla, başka sunuculardan dene
+  // (ilk deneme başarısız olan videoyu başka instance'dan kurtarmak için)
+  const ordered = rotate
+    ? (() => { const rest = PD_INST.filter((b) => b !== pdGood); return rest.length ? rest : [...PD_INST].reverse(); })()
+    : (pdGood ? [pdGood, ...PD_INST.filter((b) => b !== pdGood)] : PD_INST);
   const job = pdRace(path, ms, ordered)
     .then((res) => {
       pdCache.set(path, { json: res.json, base: res.base, exp: Date.now() + ttl });
@@ -189,10 +193,10 @@ const Api = {
     };
   },
 
-  async stream(id) {
+  async stream(id, fresh = false) {
     if (!STATIC) return fetch('/api/stream/' + id).then(r => r.json());
-    const embed = `https://piped.private.coffee/embed/${id}`; // reklamsız yedek (YouTube embed reklam gösterir)
-    const { json: d, base } = await pp(`/streams/${id}`);
+    if (fresh) pdCache.delete('/streams/' + id); // eski/bozuk kaynakları at, başka instance'dan dene
+    const { json: d, base } = await pp(`/streams/${id}`, 6000, PD_TTL, fresh);
     if (!d || !d.title) throw new Error('stream yok');
     const sources = pdSources(d);
     const hlsX = (d.videoStreams || []).filter(s => s?.url && pdIsHls(s.url) && !s.url.includes('odycdn.com'));
@@ -200,7 +204,7 @@ const Api = {
     const split = pdSplit(d);
     return {
       title: d.title, author: d.uploader, thumbnail: pdThumb(id),
-      sources, hls, embed, source: 'piped-direct:' + base,
+      sources, hls, source: 'piped-direct:' + base,
       vo: split.vo, ao: split.ao, aoType: split.aoType,
       combined720: sources[0]?.url || null, combined: sources[0]?.url || null
     };

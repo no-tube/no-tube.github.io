@@ -53,7 +53,7 @@ function toast(msg) {
   t._t = setTimeout(() => t.classList.add('hidden'), 2000);
 }
 function shareToast() {
-  const url = $('embed')?.src || location.href;
+  const url = location.href;
   try { navigator.clipboard.writeText(url); toast('Bağlantı kopyalandı'); } catch { toast('Paylaşım bağlantısı: ' + url); }
 }
 function doSearchPrompt(q) { $('q').value = q; doSearch(); }
@@ -326,8 +326,8 @@ async function watch(id) {
   syncUrl('v=' + id);
   window.scrollTo(0,0);
   $('vTitle').textContent = 'Yükleniyor...'; $('related').innerHTML = ''; $('comments').innerHTML = '';
-  $('player').classList.add('hidden'); $('embed').classList.add('hidden');
-  const cycBtn = $('invCycle'); if (cycBtn) cycBtn.classList.add('hidden');
+  $('player').classList.add('hidden');
+  clearFailCard();
   $('comments').innerHTML = Array.from({ length: 4 }, skelComment).join('');
   const commentsP = Api.comments(id).catch(() => ({ comments: [] }));
   try {
@@ -381,10 +381,10 @@ async function watch(id) {
     const c = await commentsP;
     if (my !== watchToken) return;
     $('comments').innerHTML = (c.comments||[]).slice(0,50).map(commentItem).join('') || '<p class="text-[#aaaaaa]">Yorum yok</p>';
-  } catch (e) { // son çare: reklamsız Invidious yedek oynatıcı
+  } catch (e) { // video bilgisi bile gelmedi: temiz hata kartı (embed/reklam yok)
     if (my !== watchToken) return;
-    $('vTitle').textContent = 'Video açılıyor (yedek oynatıcı)...';
-    showEmbed(id);
+    $('vTitle').textContent = 'Video yüklenemedi';
+    showFailCard(id, 'Video bilgisi alınamadı, sunucular yanıt vermiyor.');
   }
 }
 
@@ -404,105 +404,127 @@ function commentItem(x) {
   </div>`;
 }
 
-// ---------- Reklamsız yedek oynatıcı (Piped embed) ----------
-// YouTube embed'ı reklam gösterir; Invidious instance'ları ise Anubis/CAPTCHA
-// bot-check'ine düşürüyor. Piped ön yüz embed'leri ikisinden de temiz ve
-// sitenin zaten kullandığı Piped API'lerinin kendi ön yüzleri.
-const EMBED_FALLBACKS = [
-  { fe: 'https://piped.private.coffee', api: 'https://api.piped.private.coffee' },
-  { fe: 'https://piped.ducks.party', api: 'https://pipedapi.ducks.party' },
-  { fe: 'https://piped.reallyaweso.me', api: 'https://pipedapi.reallyaweso.me' },
-  { fe: 'https://piped.video' } // API'si ayrı alan adında; ön-test yapılmadan son çare
-];
-let embedIdx = 0;
-let curEmbed = null; // { id, autoplay, ctx }
-
-function pickEmbedHost(id) {
-  const order = EMBED_FALLBACKS.slice(embedIdx).concat(EMBED_FALLBACKS.slice(0, embedIdx));
-  const probed = order.filter((e) => e.api);
-  const rest = order.filter((e) => !e.api);
-  return Promise.all(probed.map((e) =>
-    fetch(`${e.api}/streams/${id}`, { signal: AbortSignal.timeout(3500) })
-      .then((r) => (r.ok ? r.json().then((j) => (j && j.title ? e : null)) : null))
-      .catch(() => null)
-  )).then((res) => {
-    const hit = probed.find((_, k) => res[k]);
-    if (hit) embedIdx = EMBED_FALLBACKS.indexOf(hit);
-    const pick = hit || rest[0] || order[0];
-    return pick.fe;
-  });
+// ---------- Reklamsız yedek oynatma ----------
+// Iframe embed KULLANILMAZ: YouTube embed'ı reklam gösterir, Piped/Invidious
+// embed ise hem ağır hem kendi arayüzünü dayatır. Bunun yerine:
+// 1) Birleşik mp4 kaynakları sırayla denenir (playWithFallback)
+// 2) HLS denenir
+// 3) Ayrı görüntü+ses hattı (dual-track, Shorts'ta kanıtlanmış yöntem)
+// 4) Kaynaklar tazelenip BAŞKA Piped instance'ından yeniden denenir
+// 5) Hâlâ yoksa temiz hata kartı: tekrar dene / YouTube'da aç
+function showFailCard(id, msg) {
+  const box = $('player')?.parentElement;
+  if (!box) return;
+  $('failCard')?.remove();
+  const div = document.createElement('div');
+  div.id = 'failCard';
+  div.className = 'absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/90 text-center px-6';
+  div.innerHTML = `
+    <p class="text-sm text-[#aaaaaa] max-w-md">${esc(msg || 'Reklamsız akış hiçbir sunucudan yüklenemedi.')}</p>
+    <div class="flex gap-2">
+      <button onclick="watch('${id}')" class="apill">↻ Tekrar dene</button>
+      <a href="https://www.youtube.com/watch?v=${id}" target="_blank" rel="noopener" class="apill">YouTube'da aç</a>
+    </div>`;
+  box.appendChild(div);
 }
 
-async function embedNoAds(id, autoplay = 0, mount = null) {
-  curEmbed = { id, autoplay, ctx: mount ? 'shorts' : 'watch' };
-  const base = await pickEmbedHost(id);
-  const src = `${base}/embed/${id}` + (autoplay ? '?autoplay=1' : '');
-  if (mount) {
-    const f = document.createElement('iframe');
-    f.src = src;
-    f.className = 'w-full h-full';
-    f.allow = 'autoplay; encrypted-media; picture-in-picture';
-    f.allowFullscreen = true;
-    mount.querySelectorAll('video,button').forEach((el) => el.remove());
-    mount.prepend(f);
-  } else {
-    $('player').classList.add('hidden');
-    const f = $('embed');
-    f.src = src;
-    f.classList.remove('hidden');
-    const cyc = $('invCycle');
-    if (cyc) cyc.classList.remove('hidden');
-  }
+function clearFailCard() { $('failCard')?.remove(); }
+
+// Görüntü hattı sessiz açılır, ses ayrı Audio elementinden eşzamanlı çalar
+function attachDual(p, s) {
+  if (!s.ao) return;
+  const au = new Audio(s.ao);
+  au.preload = 'auto';
+  p._au = au;
+  p.muted = true; // görüntü hattında ses yok; ses ayrı elementten
+  const inner = p.ontimeupdate; // SponsorBlock atlayıcısını koru
+  p._otuInner = inner;
+  p.ontimeupdate = () => {
+    if (inner) inner.call(p);
+    if (p._au && !p.seeking) {
+      try { if (Math.abs(p._au.currentTime - p.currentTime) > 0.35) p._au.currentTime = p.currentTime; } catch {}
+    }
+  };
+  p.onplay = () => { try { au.currentTime = p.currentTime; au.play().catch(() => {}); } catch {} };
+  p.onpause = () => { try { au.pause(); } catch {} };
+  p.onseeked = () => { try { au.currentTime = p.currentTime; } catch {} };
+  p.onvolumechange = () => { try { au.volume = p.volume; au.muted = p.muted; } catch {} };
 }
 
-// Embed oynamıyorsa kullanıcı başka yedek sunucuya geçebilir
-function cycleInv() {
-  if (!curEmbed || curEmbed.ctx !== 'watch') return;
-  embedIdx = (embedIdx + 1) % EMBED_FALLBACKS.length;
-  $('embed').src = '';
-  embedNoAds(curEmbed.id, curEmbed.autoplay);
-  toast('Yedek sunucu: ' + EMBED_FALLBACKS[embedIdx].fe.replace('https://', ''));
+function detachDual(p) {
+  if (p._au) { try { p._au.pause(); } catch {} p._au = null; }
+  if (p._otuInner !== undefined) { p.ontimeupdate = p._otuInner || null; p._otuInner = null; }
+  p.muted = false;
+  p.onplay = null; p.onpause = null; p.onseeked = null; p.onvolumechange = null;
 }
 
-function showEmbed(id) {
-  return embedNoAds(id, 0);
-}
-
-function playWithFallback(id, poster, stream) {
+function playWithFallback(id, poster, streamRef) {
   const p = $('player');
+  clearFailCard();
   p.classList.remove('hidden');
   p.poster = poster || '';
   if (p._hls) { try { p._hls.destroy(); } catch {} p._hls = null; }
   if (p._errHandler) { p.removeEventListener('error', p._errHandler); p._errHandler = null; }
+  detachDual(p);
   p.onplaying = null;
 
-  const sources = [...(stream?.sources || [])];
-  // eski backend alanlarıyla uyumluluk
-  for (const k of ['combined720', 'combined', 'video720', 'video480']) {
-    if (stream?.[k] && !sources.some(s => s.url === stream[k])) sources.push({ url: stream[k], type: 'video/mp4' });
-  }
-  let i = 0, hlsTried = false, done = false;
-  const embed = () => { if (!done) { done = true; showEmbed(id); } };
+  let stream = streamRef;
+  let sources = [];
+  const fill = () => {
+    sources = [...(stream?.sources || [])];
+    // eski backend alanlarıyla uyumluluk
+    for (const k of ['combined720', 'combined', 'video720', 'video480']) {
+      if (stream?.[k] && !sources.some(s => s.url === stream[k])) sources.push({ url: stream[k], type: 'video/mp4' });
+    }
+  };
+  fill();
+
+  let i = 0, hlsTried = false, dualTried = false, round = 0, done = false;
+
+  const tryDual = () => {
+    if (dualTried) return retryFresh();
+    dualTried = true;
+    if (!stream?.vo) return retryFresh();
+    attachDual(p, stream);
+    p.src = stream.vo;
+    try { p.load(); } catch {}
+  };
+
   const tryHls = () => {
-    if (hlsTried) return embed();
+    if (hlsTried) return tryDual();
     hlsTried = true;
+    if (!stream?.hls) return tryDual();
     if (window.Hls && Hls.isSupported()) {
       const hls = new Hls(); p._hls = hls;
       hls.loadSource(stream.hls); hls.attachMedia(p);
-      hls.on(Hls.Events.ERROR, (ev, data) => { if (data?.fatal) embed(); });
+      hls.on(Hls.Events.ERROR, (ev, data) => { if (data?.fatal) tryDual(); });
     } else {
       p.src = stream.hls; // Safari native HLS
       try { p.load(); } catch {}
     }
   };
+
+  const retryFresh = async () => {
+    if (round >= 2) return showFailCard(id);
+    round++;
+    const s2 = await Api.stream(id, true).catch(() => null);
+    if (done) return;
+    if (s2 && ((s2.sources && s2.sources.length) || s2.vo || s2.hls)) {
+      stream = s2; fill();
+      i = 0; hlsTried = false; dualTried = false;
+      detachDual(p);
+      next();
+    } else showFailCard(id);
+  };
+
   const next = () => {
     if (done) return;
     if (i < sources.length) { p.src = sources[i++].url; try { p.load(); } catch {} }
-    else if (stream?.hls) tryHls();
-    else embed();
+    else tryHls();
   };
+
   const onErr = () => {
-    if (hlsTried && p.src && p.src.includes('m3u8')) return embed();
+    if (p.src && p.src.includes('m3u8')) return tryDual(); // native HLS öldü
     next();
   };
   p._errHandler = onErr;
@@ -511,7 +533,7 @@ function playWithFallback(id, poster, stream) {
     done = true;
     if (p._errHandler) { p.removeEventListener('error', p._errHandler); p._errHandler = null; }
   };
-  if (!sources.length && !stream?.hls) return embed();
+  if (!sources.length && !stream?.hls && !stream?.vo) return showFailCard(id);
   next();
 }
 
@@ -646,7 +668,7 @@ async function playShort(vid) {
         vid.onpause = () => { try { au.pause(); } catch {} };
       }
     } else {
-      return embedShort(vid); // hiçbiri yok → gömülü oynatıcı
+      return embedShort(vid); // hiçbiri yok → poster + yüklenemedi notu
     }
   }
   if (!vid.isConnected) return; // arada embed'e çevrildiyse
@@ -670,11 +692,19 @@ function setMuteIcon(vid) {
     : '<svg viewBox="0 0 24 24" class="w-5 h-5" fill="#fff"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.26 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 }
 
-// Son çare: slaytın içine reklamsız Invidious oynatıcı koy
+// Son çare yok: embed (reklam/yabancı arayüz) kullanmıyoruz. Poster kalır,
+// kullanıcı kaydırır ya da "Tekrar dene" için videoya tekrar dokunur.
 function embedShort(vid) {
+  vid.dataset.noplay = '1';
   const slide = vid.closest('.slide');
-  const box = slide.querySelector('.relative');
-  return embedNoAds(vid.dataset.id, 1, box);
+  if (!slide) return;
+  let msg = slide.querySelector('.noplay');
+  if (!msg) {
+    msg = document.createElement('p');
+    msg.className = 'noplay absolute inset-0 flex items-center justify-center text-sm text-[#aaaaaa] bg-black/60';
+    msg.textContent = 'Bu kısa video yüklenemedi';
+    slide.querySelector('.relative')?.appendChild(msg);
+  }
 }
 
 function toggleShortMute(btn) {
