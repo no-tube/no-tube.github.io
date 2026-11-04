@@ -191,7 +191,7 @@ const Api = {
 
   async stream(id) {
     if (!STATIC) return fetch('/api/stream/' + id).then(r => r.json());
-    const embed = `https://www.youtube-nocookie.com/embed/${id}`;
+    const embed = `https://inv.nadeko.net/embed/${id}`; // reklamsız yedek (YouTube embed reklam gösterir)
     const { json: d, base } = await pp(`/streams/${id}`);
     if (!d || !d.title) throw new Error('stream yok');
     const sources = pdSources(d);

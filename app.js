@@ -327,6 +327,7 @@ async function watch(id) {
   window.scrollTo(0,0);
   $('vTitle').textContent = 'Yükleniyor...'; $('related').innerHTML = ''; $('comments').innerHTML = '';
   $('player').classList.add('hidden'); $('embed').classList.add('hidden');
+  const cycBtn = $('invCycle'); if (cycBtn) cycBtn.classList.add('hidden');
   $('comments').innerHTML = Array.from({ length: 4 }, skelComment).join('');
   const commentsP = Api.comments(id).catch(() => ({ comments: [] }));
   try {
@@ -380,10 +381,10 @@ async function watch(id) {
     const c = await commentsP;
     if (my !== watchToken) return;
     $('comments').innerHTML = (c.comments||[]).slice(0,50).map(commentItem).join('') || '<p class="text-[#aaaaaa]">Yorum yok</p>';
-  } catch (e) { // son çare: direkt embed
+  } catch (e) { // son çare: reklamsız Invidious yedek oynatıcı
     if (my !== watchToken) return;
     $('vTitle').textContent = 'Video açılıyor (yedek oynatıcı)...';
-    const em = $('embed'); em.src = `https://www.youtube-nocookie.com/embed/${id}`; em.classList.remove('hidden');
+    showEmbed(id);
   }
 }
 
@@ -403,9 +404,67 @@ function commentItem(x) {
   </div>`;
 }
 
+// ---------- Reklamsız yedek oynatıcı (Invidious) ----------
+// YouTube embed'ı pre-roll/mid-roll reklam gösterir; hiç kullanılmaz.
+// Yedek olarak Invidious embed'e düşülür (reklamsız, video proxy'lenir).
+// Instance API ile önceden test edilir, ölü/bloklu sunucuya gidilmez.
+const INV_INSTANCES = [
+  'https://inv.nadeko.net',
+  'https://yewtu.be',
+  'https://invidious.nerdvpn.de',
+  'https://iv.melmac.space',
+  'https://invidious.privacyredirect.com'
+];
+let invIdx = 0;
+let curEmbed = null; // { id, autoplay, ctx }
+
+function pickInvidious(id) {
+  const idx = INV_INSTANCES.map((b, i) => ({ b, i }));
+  const order = idx.slice(invIdx).concat(idx.slice(0, invIdx));
+  return Promise.all(order.map(({ b }) =>
+    fetch(`${b}/api/v1/videos/${id}?fields=title`, { signal: AbortSignal.timeout(3500) })
+      .then((r) => (r.ok ? r.json().then((j) => (j && j.title ? b : null)) : null))
+      .catch(() => null)
+  )).then((res) => {
+    const hit = order.find((_, k) => res[k]);
+    if (hit) invIdx = hit.i; // çalışan sunucuyu bir daha arama
+    return (hit || order[0]).b;
+  });
+}
+
+async function embedNoAds(id, autoplay = 0, mount = null) {
+  curEmbed = { id, autoplay, ctx: mount ? 'shorts' : 'watch' };
+  const base = await pickInvidious(id);
+  const src = `${base}/embed/${id}?autoplay=${autoplay ? 1 : 0}&local=1`;
+  if (mount) {
+    const f = document.createElement('iframe');
+    f.src = src;
+    f.className = 'w-full h-full';
+    f.allow = 'autoplay; encrypted-media; picture-in-picture';
+    f.allowFullscreen = true;
+    mount.querySelectorAll('video,button').forEach((el) => el.remove());
+    mount.prepend(f);
+  } else {
+    $('player').classList.add('hidden');
+    const f = $('embed');
+    f.src = src;
+    f.classList.remove('hidden');
+    const cyc = $('invCycle');
+    if (cyc) cyc.classList.remove('hidden');
+  }
+}
+
+// Embed oynamıyorsa kullanıcı başka Invidious sunucusuna geçebilir
+function cycleInv() {
+  if (!curEmbed || curEmbed.ctx !== 'watch') return;
+  invIdx = (invIdx + 1) % INV_INSTANCES.length;
+  $('embed').src = '';
+  embedNoAds(curEmbed.id, curEmbed.autoplay);
+  toast('Yedek sunucu değiştirildi: ' + INV_INSTANCES[invIdx].replace('https://', ''));
+}
+
 function showEmbed(id) {
-  $('player').classList.add('hidden');
-  const e = $('embed'); e.src = `https://www.youtube-nocookie.com/embed/${id}`; e.classList.remove('hidden');
+  return embedNoAds(id, 0);
 }
 
 function playWithFallback(id, poster, stream) {
@@ -610,17 +669,11 @@ function setMuteIcon(vid) {
     : '<svg viewBox="0 0 24 24" class="w-5 h-5" fill="#fff"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.26 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
 }
 
-// Son çare: slaytın içine gömülü oynatıcı koy
+// Son çare: slaytın içine reklamsız Invidious oynatıcı koy
 function embedShort(vid) {
   const slide = vid.closest('.slide');
   const box = slide.querySelector('.relative');
-  const f = document.createElement('iframe');
-  f.src = `https://www.youtube-nocookie.com/embed/${vid.dataset.id}?autoplay=1&rel=0`;
-  f.className = 'w-full h-full';
-  f.allow = 'autoplay; encrypted-media; picture-in-picture';
-  f.allowFullscreen = true;
-  box.querySelectorAll('video,button').forEach(el => el.remove());
-  box.prepend(f);
+  return embedNoAds(vid.dataset.id, 1, box);
 }
 
 function toggleShortMute(btn) {

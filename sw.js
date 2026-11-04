@@ -1,5 +1,5 @@
 /* no-tube service worker — app-shell cache only, no YouTube/API caching */
-const VERSION = 'v2.1.0';
+const VERSION = 'v2.2.0';
 const CACHE = `notube-${VERSION}`;
 const APP_SHELL = [
   './',
@@ -29,10 +29,34 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ---- Reklam / takip engelleyici ----
+// Sayfanın kendi yaptığı reklam/takip isteklerini ağa çıkmadan keser.
+// Not: cross-origin iframe'in İÇİNDEN giden isteklere SW karışamaz; bu yüzden
+// reklam gösteren YouTube embed'ı hiç kullanılmıyor (yerine Invidious var).
+const AD_HOSTS = [
+  'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+  'adservice.google.com', 'google-analytics.com', 'analytics.google.com',
+  'googletagmanager.com', 'ads.youtube.com'
+];
+const AD_SIGNS = [
+  '/pagead/', '/api/stats/ads', 'get_midroll_', '/ptracking',
+  'adformat=', 'pltype=ad', 'pltype%3Dad', '&ad_type=', 'adunit='
+];
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
-  const url = new URL(request.url);
+  let url;
+  try { url = new URL(request.url); } catch { return; }
+
+  const host = url.hostname;
+  if (
+    AD_HOSTS.some((h) => host === h || host.endsWith('.' + h)) ||
+    AD_SIGNS.some((s) => url.pathname.includes(s) || url.search.includes(s))
+  ) {
+    event.respondWith(new Response(null, { status: 204, statusText: 'ad-blocked' }));
+    return;
+  }
 
   // Cross-origin (YouTube API, thumbnails, embeds): never cache, go network-only.
   if (url.origin !== self.location.origin) return;
