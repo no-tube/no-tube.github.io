@@ -404,38 +404,39 @@ function commentItem(x) {
   </div>`;
 }
 
-// ---------- Reklamsız yedek oynatıcı (Invidious) ----------
-// YouTube embed'ı pre-roll/mid-roll reklam gösterir; hiç kullanılmaz.
-// Yedek olarak Invidious embed'e düşülür (reklamsız, video proxy'lenir).
-// Instance API ile önceden test edilir, ölü/bloklu sunucuya gidilmez.
-const INV_INSTANCES = [
-  'https://inv.nadeko.net',
-  'https://yewtu.be',
-  'https://invidious.nerdvpn.de',
-  'https://iv.melmac.space',
-  'https://invidious.privacyredirect.com'
+// ---------- Reklamsız yedek oynatıcı (Piped embed) ----------
+// YouTube embed'ı reklam gösterir; Invidious instance'ları ise Anubis/CAPTCHA
+// bot-check'ine düşürüyor. Piped ön yüz embed'leri ikisinden de temiz ve
+// sitenin zaten kullandığı Piped API'lerinin kendi ön yüzleri.
+const EMBED_FALLBACKS = [
+  { fe: 'https://piped.private.coffee', api: 'https://api.piped.private.coffee' },
+  { fe: 'https://piped.ducks.party', api: 'https://pipedapi.ducks.party' },
+  { fe: 'https://piped.reallyaweso.me', api: 'https://pipedapi.reallyaweso.me' },
+  { fe: 'https://piped.video' } // API'si ayrı alan adında; ön-test yapılmadan son çare
 ];
-let invIdx = 0;
+let embedIdx = 0;
 let curEmbed = null; // { id, autoplay, ctx }
 
-function pickInvidious(id) {
-  const idx = INV_INSTANCES.map((b, i) => ({ b, i }));
-  const order = idx.slice(invIdx).concat(idx.slice(0, invIdx));
-  return Promise.all(order.map(({ b }) =>
-    fetch(`${b}/api/v1/videos/${id}?fields=title`, { signal: AbortSignal.timeout(3500) })
-      .then((r) => (r.ok ? r.json().then((j) => (j && j.title ? b : null)) : null))
+function pickEmbedHost(id) {
+  const order = EMBED_FALLBACKS.slice(embedIdx).concat(EMBED_FALLBACKS.slice(0, embedIdx));
+  const probed = order.filter((e) => e.api);
+  const rest = order.filter((e) => !e.api);
+  return Promise.all(probed.map((e) =>
+    fetch(`${e.api}/streams/${id}`, { signal: AbortSignal.timeout(3500) })
+      .then((r) => (r.ok ? r.json().then((j) => (j && j.title ? e : null)) : null))
       .catch(() => null)
   )).then((res) => {
-    const hit = order.find((_, k) => res[k]);
-    if (hit) invIdx = hit.i; // çalışan sunucuyu bir daha arama
-    return (hit || order[0]).b;
+    const hit = probed.find((_, k) => res[k]);
+    if (hit) embedIdx = EMBED_FALLBACKS.indexOf(hit);
+    const pick = hit || rest[0] || order[0];
+    return pick.fe;
   });
 }
 
 async function embedNoAds(id, autoplay = 0, mount = null) {
   curEmbed = { id, autoplay, ctx: mount ? 'shorts' : 'watch' };
-  const base = await pickInvidious(id);
-  const src = `${base}/embed/${id}?autoplay=${autoplay ? 1 : 0}&local=1`;
+  const base = await pickEmbedHost(id);
+  const src = `${base}/embed/${id}` + (autoplay ? '?autoplay=1' : '');
   if (mount) {
     const f = document.createElement('iframe');
     f.src = src;
@@ -454,13 +455,13 @@ async function embedNoAds(id, autoplay = 0, mount = null) {
   }
 }
 
-// Embed oynamıyorsa kullanıcı başka Invidious sunucusuna geçebilir
+// Embed oynamıyorsa kullanıcı başka yedek sunucuya geçebilir
 function cycleInv() {
   if (!curEmbed || curEmbed.ctx !== 'watch') return;
-  invIdx = (invIdx + 1) % INV_INSTANCES.length;
+  embedIdx = (embedIdx + 1) % EMBED_FALLBACKS.length;
   $('embed').src = '';
   embedNoAds(curEmbed.id, curEmbed.autoplay);
-  toast('Yedek sunucu değiştirildi: ' + INV_INSTANCES[invIdx].replace('https://', ''));
+  toast('Yedek sunucu: ' + EMBED_FALLBACKS[embedIdx].fe.replace('https://', ''));
 }
 
 function showEmbed(id) {
